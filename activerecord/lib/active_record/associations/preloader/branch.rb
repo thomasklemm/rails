@@ -25,7 +25,10 @@ module ActiveRecord
         end
 
         def future_classes
-          (immediate_future_classes + children.flat_map(&:future_classes)).uniq
+          classes = immediate_future_classes
+          children.each { |child| classes.concat(child.future_classes) }
+          classes.uniq!
+          classes
         end
 
         def immediate_future_classes
@@ -74,7 +77,7 @@ module ActiveRecord
         end
 
         def runnable_loaders
-          loaders.flat_map(&:runnable_loaders).reject(&:run?)
+          loaders.flat_map(&:runnable_loaders).delete_if(&:run?)
         end
 
         def grouped_records
