@@ -560,6 +560,21 @@ class TagHelperTest < ActionView::TestCase
     end
   end
 
+  def test_token_list_and_class_attribute_collect_nested_values_into_one_array
+    nested = ["song", ["play", { "pause" => true }]]
+    flat = ["song", "play", { "pause" => true }]
+
+    # The second round runs on warm call sites. A nested Array costs only
+    # the copy its splat makes.
+    counts = 2.times.map do
+      [allocations { token_list(*nested) }, allocations { token_list(*flat) },
+        allocations { tag.div(class: nested) }, allocations { tag.div(class: flat) }]
+    end
+    assert_equal counts.last[1] + 1, counts.last[0]
+    assert_equal counts.last[3] + 1, counts.last[2]
+    assert_equal %(<div class="song play pause"></div>), tag.div(class: nested)
+  end
+
   def test_token_list_and_class_names_returns_an_html_safe_string
     assert_predicate token_list("a value"), :html_safe?
     assert_predicate class_names("a value"), :html_safe?
@@ -741,4 +756,11 @@ class TagHelperTest < ActionView::TestCase
   def test_respond_to
     assert_respond_to tag, :any_tag
   end
+
+  private
+    def allocations
+      before = GC.stat(:total_allocated_objects)
+      yield
+      GC.stat(:total_allocated_objects) - before
+    end
 end

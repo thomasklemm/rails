@@ -1561,7 +1561,8 @@ module ActionView
 
                 case v
                 when Array, Hash
-                  tokens = TagHelper.build_tag_values(v)
+                  tokens = []
+                  TagHelper.append_tag_value(tokens, v)
                   next if tokens.none?
 
                   v = @view_context.safe_join(tokens, " ")
@@ -1633,7 +1634,11 @@ module ActionView
 
             case value
             when Array, Hash
-              value = TagHelper.build_tag_values(value) if key == "class"
+              if key == "class"
+                tag_values = []
+                TagHelper.append_tag_value(tag_values, value)
+                value = tag_values
+              end
               value = escape ? @view_context.safe_join(value, " ") : value.join(" ")
             when Regexp
               value = escape ? ERB::Util.unwrapped_html_escape(value.source) : value.source
@@ -1811,7 +1816,9 @@ module ActionView
       # ```
       def token_list(*args)
         tokens = []
-        build_tag_values(*args).each do |value|
+        values = []
+        args.each { |arg| TagHelper.append_tag_value(values, arg) }
+        values.each do |value|
           value = value.to_s
           value = CGI.unescape_html(value) if value.include?("&")
           # The block form of split yields each token without building an
@@ -1866,23 +1873,30 @@ module ActionView
 
         def build_tag_values(*args)
           tag_values = []
-
-          args.each do |tag_value|
-            case tag_value
-            when Hash
-              tag_value.each do |key, val|
-                tag_values << key.to_s if val && key.present?
-              end
-            when Array
-              tag_values.concat build_tag_values(*tag_value)
-            else
-              tag_values << tag_value.to_s if tag_value.present?
-            end
-          end
-
+          args.each { |tag_value| TagHelper.append_tag_value(tag_values, tag_value) }
           tag_values
         end
         module_function :build_tag_values # :nodoc:
+
+        # Appends the tokens of +tag_value+ to +tag_values+. Nested Arrays are
+        # splatted, as build_tag_values did, so their elements are read from a
+        # copy, but are not collected into an Array of their own.
+        def self.append_tag_value(tag_values, tag_value) # :nodoc:
+          case tag_value
+          when Hash
+            tag_value.each do |key, val|
+              tag_values << key.to_s if val && key.present?
+            end
+          when Array
+            append_tag_values(tag_values, *tag_value)
+          else
+            tag_values << tag_value.to_s if tag_value.present?
+          end
+        end
+
+        def self.append_tag_values(tag_values, *args) # :nodoc:
+          args.each { |tag_value| append_tag_value(tag_values, tag_value) }
+        end
 
         def tag_builder
           @tag_builder ||= TagBuilder.new(self)
