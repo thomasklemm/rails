@@ -71,6 +71,22 @@ module ActiveSupport
       end
     end
 
+    def test_number_to_currency_reads_missing_formats_without_a_default_per_call
+      defaults = []
+      translate = I18n.method(:translate)
+      recording = ->(key, **options) do
+        defaults << options[:default] if key.to_s.end_with?("format")
+        translate.(key, **options)
+      end
+
+      I18n.stub(:translate, recording) do
+        2.times { assert_equal("$10.00", number_to_currency(10, locale: "empty")) }
+      end
+
+      assert_equal 1, defaults.uniq(&:object_id).size
+      assert defaults.all? { |default| default.empty? && default.frozen? }
+    end
+
     def test_nested_converters_use_the_locale_precision_format
       I18n.backend.store_translations "precision_only",
         number: { precision: { format: { round_mode: :down, delimiter_pattern: /(\d)(?=(\d{2})+(?!\d))/ } } }

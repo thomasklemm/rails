@@ -188,10 +188,10 @@ module ActiveSupport
 
         def i18n_format_options
           locale = opts[:locale]
-          options = I18n.translate(:'number.format', locale: locale, default: {}).dup
+          options = I18n.translate(:'number.format', locale: locale, default: EMPTY_FORMAT).dup
 
           if namespace
-            options.merge!(I18n.translate(self.class.i18n_format_key, locale: locale, default: {}))
+            options.merge!(I18n.translate(self.class.i18n_format_key, locale: locale, default: EMPTY_FORMAT))
           end
 
           options
