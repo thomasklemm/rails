@@ -975,6 +975,26 @@ class FormHelperTest < ActionView::TestCase
     )
   end
 
+  def test_radio_button_id_from_value_edits_only_its_own_copy
+    value = +"In Progress.v2"
+    frozen = "Frozen Value"
+
+    assert_dom_equal(
+      %{<input id="post_title_in_progress_v2" name="post[title]" type="radio" value="In Progress.v2" />},
+      radio_button("post", "title", value)
+    )
+    assert_equal "In Progress.v2", value
+    assert_match %r{id="post_title_frozen_value"}, radio_button("post", "title", frozen)
+
+    # The id edits its own copy instead of allocating a new String per step.
+    tag = ActionView::Helpers::Tags::Base.allocate
+    counts = 2.times.map do
+      [allocations { tag.send(:sanitized_value, value) },
+        allocations { value.to_s.gsub(/[\s.]/, "_").gsub(/[^-[[:word:]]]/, "").downcase }]
+    end
+    assert_operator counts.last[0], :<, counts.last[1]
+  end
+
   def test_radio_button_with_negative_integer_value
     assert_dom_equal('<input id="post_secret_-1" name="post[secret]" type="radio" value="-1" />',
       radio_button("post", "secret", "-1"))
@@ -4363,6 +4383,12 @@ class FormHelperTest < ActionView::TestCase
   end
 
   private
+    def allocations
+      before = GC.stat(:total_allocated_objects)
+      yield
+      GC.stat(:total_allocated_objects) - before
+    end
+
     def hidden_fields(options = {})
       method = options[:method]
 

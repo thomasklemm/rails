@@ -126,7 +126,14 @@ module ActionView
           end
 
           def sanitized_value(value)
-            value.to_s.gsub(/[\s.]/, "_").gsub(/[^-[[:word:]]]/, "").downcase
+            value = value.to_s
+            return value.gsub(/[\s.]/, "_").gsub(/[^-[[:word:]]]/, "").downcase unless value.instance_of?(String)
+
+            # String#gsub returns a new String, so the other steps can edit it in place.
+            sanitized = value.gsub(/[\s.]/, "_")
+            sanitized.gsub!(/[^-[[:word:]]]/, "")
+            sanitized.downcase!
+            sanitized
           end
 
           def name_and_id_index(options)
