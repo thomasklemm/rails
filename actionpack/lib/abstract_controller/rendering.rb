@@ -58,10 +58,10 @@ module AbstractController
     # This method should return a hash with assigns. You can overwrite this
     # configuration per controller.
     def view_assigns
-      variables = instance_variables - _protected_ivars
+      protected_vars = _protected_ivars
 
-      variables.each_with_object({}) do |name, hash|
-        hash[name.slice(1, name.length)] = instance_variable_get(name)
+      instance_variables.each_with_object({}) do |name, hash|
+        hash[name.slice(1, name.length)] = instance_variable_get(name) unless protected_vars.include?(name)
       end
     end
 
