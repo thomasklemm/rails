@@ -3,6 +3,7 @@
 require "securerandom"
 require_relative "../abstract_unit"
 require "active_support/core_ext/string/inflections"
+require "active_support/core_ext/string/output_safety"
 require "active_support/core_ext/object/with"
 require "active_support/json"
 require "active_support/time"
@@ -58,6 +59,122 @@ class TestJSONEncoding < ActiveSupport::TestCase
     assert_equal %{{"\u2028":"\u2029"}}, ActiveSupport::JSON.encode({ "\u2028" => "\u2029" }, escape: false)
     ActiveSupport::JSON::Encoding.with(escape_js_separators_in_json: false) do
       assert_equal %{{"\u2028":"\u2029"}}, ActiveSupport::JSON.encode({ "\u2028" => "\u2029" })
+    end
+  end
+
+  def test_escape_options_apply_independently
+    value = { "a" => "<&>\u2028<&>\u2029" }
+    ActiveSupport::JSON::Encoding.with(escape_html_entities_in_json: true, escape_js_separators_in_json: true) do
+      assert_equal %({"a":"\\u003c\\u0026\\u003e\\u2028\\u003c\\u0026\\u003e\\u2029"}), ActiveSupport::JSON.encode(value)
+      assert_equal %({"a":"<&>\\u2028<&>\\u2029"}), ActiveSupport::JSON.encode(value, escape_html_entities: false)
+    end
+    ActiveSupport::JSON::Encoding.with(escape_html_entities_in_json: true, escape_js_separators_in_json: false) do
+      assert_equal %({"a":"\\u003c\\u0026\\u003e\u2028\\u003c\\u0026\\u003e\u2029"}), ActiveSupport::JSON.encode(value)
+      assert_equal %({"a":"<&>\u2028<&>\u2029"}), ActiveSupport::JSON.encode(value, escape_html_entities: false)
+    end
+  end
+
+  class IncludeNothingString < String
+    def include?(*) = false
+  end
+
+  class IncludeNothingEncoder < ActiveSupport::JSON::Encoding::JSONGemEncoder
+    private
+      def stringify(jsonified)
+        IncludeNothingString.new(super)
+      end
+  end
+
+  class SingletonIncludeNothingEncoder < ActiveSupport::JSON::Encoding::JSONGemEncoder
+    private
+      def stringify(jsonified)
+        super.tap { |json| def json.include?(*) = false }
+      end
+  end
+
+  class SingletonEqualRaisesEncoder < ActiveSupport::JSON::Encoding::JSONGemEncoder
+    private
+      def stringify(jsonified)
+        super.tap { |json| def json.equal?(*) = raise("equal? called") }
+      end
+  end
+
+  class InvalidUnconvertedEncoder < ActiveSupport::JSON::Encoding::JSONGemEncoder
+    private
+      def stringify(jsonified)
+        "\"\xFF\"".dup.tap { |json| def json.force_encoding(*) = self }
+      end
+  end
+
+  class FrozenUnconvertedEncoder < ActiveSupport::JSON::Encoding::JSONGemEncoder
+    private
+      def stringify(jsonified)
+        super.tap { |json| def json.force_encoding(*) = self }.freeze
+      end
+  end
+
+  class DelegatorEncoder < ActiveSupport::JSON::Encoding::JSONGemEncoder
+    private
+      def stringify(jsonified)
+        SimpleDelegator.new(super)
+      end
+  end
+
+  class ProxyEncoder < ActiveSupport::JSON::Encoding::JSONGemEncoder
+    Proxy = Class.new(BasicObject) do
+      def initialize(target) = @target = target
+      def method_missing(...) = @target.__send__(...)
+      def respond_to_missing?(...) = @target.respond_to?(...)
+    end
+
+    private
+      def stringify(jsonified)
+        Proxy.new(super)
+      end
+  end
+
+  class HtmlSafeEncoder < ActiveSupport::JSON::Encoding::JSONGemEncoder
+    private
+      def stringify(jsonified)
+        super.html_safe
+      end
+  end
+
+  def test_escape_string_subclass_from_custom_encoder
+    ActiveSupport::JSON::Encoding.with(json_encoder: IncludeNothingEncoder, escape_html_entities_in_json: true, escape_js_separators_in_json: true) do
+      assert_equal %({"a":"\\u003c\\u0026\\u003e\\u2028\\u2029"}), ActiveSupport::JSON.encode({ "a" => "<&>\u2028\u2029" })
+    end
+  end
+
+  def test_escape_string_with_singleton_methods_from_custom_encoder
+    ActiveSupport::JSON::Encoding.with(json_encoder: SingletonIncludeNothingEncoder, escape_html_entities_in_json: true, escape_js_separators_in_json: true) do
+      assert_equal %({"a":"\\u003c\\u0026\\u003e\\u2028\\u2029"}), ActiveSupport::JSON.encode({ "a" => "<&>\u2028\u2029" })
+    end
+    ActiveSupport::JSON::Encoding.with(json_encoder: SingletonEqualRaisesEncoder, escape_html_entities_in_json: true, escape_js_separators_in_json: true) do
+      assert_equal %({"a":"\\u003c\\u0026\\u003e\\u2028\\u2029"}), ActiveSupport::JSON.encode({ "a" => "<&>\u2028\u2029" })
+    end
+  end
+
+  def test_escape_string_that_force_encoding_does_not_convert_from_custom_encoder
+    ActiveSupport::JSON::Encoding.with(json_encoder: InvalidUnconvertedEncoder, escape_html_entities_in_json: true) do
+      assert_raises(ArgumentError) { ActiveSupport::JSON.encode({ "a" => 1 }) }
+    end
+    ActiveSupport::JSON::Encoding.with(json_encoder: FrozenUnconvertedEncoder, escape_html_entities_in_json: true) do
+      assert_raises(FrozenError) { ActiveSupport::JSON.encode({ "a" => 1 }) }
+    end
+  end
+
+  def test_escape_proxy_from_custom_encoder
+    [DelegatorEncoder, ProxyEncoder].each do |encoder|
+      ActiveSupport::JSON::Encoding.with(json_encoder: encoder, escape_html_entities_in_json: true, escape_js_separators_in_json: true) do
+        assert_equal %({"a":"\\u003c\\u0026\\u003e\\u2028\\u2029"}), ActiveSupport::JSON.encode({ "a" => "<&>\u2028\u2029" }).to_s
+      end
+    end
+  end
+
+  def test_escape_marks_safe_buffer_from_custom_encoder_unsafe
+    ActiveSupport::JSON::Encoding.with(json_encoder: HtmlSafeEncoder, escape_html_entities_in_json: true) do
+      assert_not_predicate ActiveSupport::JSON.encode({ "a" => 1 }), :html_safe?
     end
   end
 

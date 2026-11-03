@@ -82,6 +82,16 @@ module ActiveSupport
       HTML_ENTITIES_REGEX = Regexp.union(*(ESCAPED_CHARS.keys - [U2028, U2029])).freeze
       FULL_ESCAPE_REGEX = Regexp.union(*ESCAPED_CHARS.keys).freeze
       JS_SEPARATORS_REGEX = Regexp.union(U2028, U2029).freeze
+      HTML_ENTITIES = ESCAPED_CHARS.except(U2028, U2029).freeze
+      JS_SEPARATORS = ESCAPED_CHARS.slice(U2028, U2029).freeze
+      # Core String methods, called directly so that methods defined on the
+      # generated String itself can't change how it is escaped.
+      STRING_TO_S = ActiveSupport::Ractors.make_shareable(::String.instance_method(:to_s))
+      EQUAL = ActiveSupport::Ractors.make_shareable(::BasicObject.instance_method(:equal?))
+      STRING_UPLUS = ActiveSupport::Ractors.make_shareable(::String.instance_method(:+@))
+      STRING_ENCODING = ActiveSupport::Ractors.make_shareable(::String.instance_method(:encoding))
+      STRING_INCLUDE = ActiveSupport::Ractors.make_shareable(::String.instance_method(:include?))
+      STRING_GSUB = ActiveSupport::Ractors.make_shareable(::String.instance_method(:gsub!))
 
       UTF8_ESCAPED_CHARS = {
         "\u2028" => '\u2028',
@@ -137,15 +147,8 @@ module ActiveSupport
           else
             def escape!(json)
               json.force_encoding(::Encoding::BINARY)
-              if @options.fetch(:escape_html_entities, Encoding.escape_html_entities_in_json)
-                if Encoding.escape_js_separators_in_json
-                  json.gsub!(FULL_ESCAPE_REGEX, ESCAPED_CHARS)
-                else
-                  json.gsub!(HTML_ENTITIES_REGEX, ESCAPED_CHARS)
-                end
-              elsif Encoding.escape_js_separators_in_json
-                json.gsub!(JS_SEPARATORS_REGEX, ESCAPED_CHARS)
-              end
+              Encoding.escape_binary!(json, @options.fetch(:escape_html_entities, Encoding.escape_html_entities_in_json),
+                Encoding.escape_js_separators_in_json)
               json.force_encoding(::Encoding::UTF_8)
             end
           end
@@ -266,15 +269,8 @@ module ActiveSupport
             else
               def escape!(json)
                 json.force_encoding(::Encoding::BINARY)
-                if @options.fetch(:escape_html_entities, Encoding.escape_html_entities_in_json)
-                  if Encoding.escape_js_separators_in_json
-                    json.gsub!(FULL_ESCAPE_REGEX, ESCAPED_CHARS)
-                  else
-                    json.gsub!(HTML_ENTITIES_REGEX, ESCAPED_CHARS)
-                  end
-                elsif Encoding.escape_js_separators_in_json
-                  json.gsub!(JS_SEPARATORS_REGEX, ESCAPED_CHARS)
-                end
+                Encoding.escape_binary!(json, @options.fetch(:escape_html_entities, Encoding.escape_html_entities_in_json),
+                  Encoding.escape_js_separators_in_json)
                 json.force_encoding(::Encoding::UTF_8)
               end
             end
@@ -317,6 +313,29 @@ module ActiveSupport
 
         def encode_without_escape(value) # :nodoc:
           @encoder_without_escape.encode(value)
+        end
+
+        # Escapes the binary String `json` in place. For a binary String that
+        # is not frozen (String#to_s returns a copy for instances of
+        # subclasses, and String#+@ for frozen Strings), searching for each
+        # character is cheaper than one Regexp pass and skips the replacement
+        # when a character does not occur. Anything else, such as a SafeBuffer,
+        # a proxy that isn't a String, or a String whose force_encoding did not
+        # make it binary, keeps the single gsub! and its side effects.
+        def escape_binary!(json, html_entities, js_separators) # :nodoc:
+          if ::String === json && EQUAL.bind_call(STRING_UPLUS.bind_call(STRING_TO_S.bind_call(json)), json) &&
+              ::Encoding::BINARY.equal?(STRING_ENCODING.bind_call(json))
+            if html_entities
+              HTML_ENTITIES.each_key { |char| STRING_GSUB.bind_call(json, char, HTML_ENTITIES) if STRING_INCLUDE.bind_call(json, char) }
+            end
+            if js_separators
+              JS_SEPARATORS.each_key { |char| STRING_GSUB.bind_call(json, char, JS_SEPARATORS) if STRING_INCLUDE.bind_call(json, char) }
+            end
+          elsif html_entities
+            json.gsub!(js_separators ? FULL_ESCAPE_REGEX : HTML_ENTITIES_REGEX, ESCAPED_CHARS)
+          elsif js_separators
+            json.gsub!(JS_SEPARATORS_REGEX, ESCAPED_CHARS)
+          end
         end
       end
 
