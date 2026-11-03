@@ -2472,8 +2472,10 @@ module ActiveRecord
       end
 
       def column_references(order_args)
-        order_args.flat_map do |arg|
-          case arg
+        references = nil
+
+        order_args.each do |arg|
+          ref = case arg
           when String, Symbol
             extract_table_name_from(arg)
           when Hash
@@ -2493,7 +2495,18 @@ module ActiveRecord
               arg.expr.relation.name
             end
           end
-        end.filter_map { |ref| Arel.sql(ref, retryable: true) if ref }
+
+          if (converted = Array.try_convert(ref))
+            (references ||= []).concat(converted)
+          elsif ref
+            (references ||= []) << ref
+          end
+        end
+
+        return FROZEN_EMPTY_ARRAY unless references
+
+        references.select! { |ref| ref }
+        references.map! { |ref| Arel.sql(ref, retryable: true) }
       end
 
       def extract_table_name_from(string)
