@@ -13,7 +13,7 @@ module ActiveSupport
         if s.html_safe?
           s
         else
-          super(s)
+          ERB::Escape.html_escape(s)
         end
       end
       alias :unwrapped_html_escape :html_escape # :nodoc:
