@@ -80,6 +80,9 @@ module ActionController # :nodoc:
           modern: { safari: 17.2, chrome: 120, firefox: 121, opera: 106, ie: false }.freeze
         }.freeze
 
+        # The named sets never change, so their lookups are built once.
+        EXPANDED_SETS = SETS.transform_values { |set| set.with_indifferent_access.freeze }.freeze
+
         attr_reader :request, :versions
 
         def initialize(request, versions:)
@@ -131,7 +134,7 @@ module ActionController # :nodoc:
           end
 
           def expanded_versions
-            @expanded_versions ||= (SETS[versions] || versions).with_indifferent_access
+            @expanded_versions ||= EXPANDED_SETS[versions] || versions.with_indifferent_access
           end
 
           def normalized_browser_name
