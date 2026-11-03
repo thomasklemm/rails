@@ -227,10 +227,14 @@ module ActionDispatch
             def call(t, method_name, args, inner_options, url_strategy)
               if args.size == arg_size && optimizable_options?(inner_options) && optimize_routes_generation?(t) &&
                   (@options_optimizable || !default_url_options?(t))
-                options = t.url_options.merge @options
+                url_options = t.url_options
                 # As in RouteSet#url_for, the route set's default URL options come last.
                 route_set_defaults = t._routes.default_url_options
-                options = route_set_defaults.merge(options) unless route_set_defaults.empty?
+                options = if route_set_defaults.empty?
+                  url_options.merge(@options)
+                else
+                  route_set_defaults.merge(url_options, @options)
+                end
                 format = inner_options && inner_options[:format]
                 path = optimized_helper(args, format)
                 if path.nil?
