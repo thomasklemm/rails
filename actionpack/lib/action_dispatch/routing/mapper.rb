@@ -81,6 +81,7 @@ module ActionDispatch
       class Mapping # :nodoc:
         ANCHOR_CHARACTERS_REGEX = %r{\A(\\A|\^)|(\\Z|\\z|\$)\Z}
         OPTIONAL_FORMAT_REGEX = %r{(?:\(\.:format\)+|\.:format|/)\Z}
+        ACTION_DISPATCH_DIR = File.expand_path("..", __dir__).freeze
 
         attr_reader :path, :requirements, :defaults, :to, :default_controller,
                     :default_action, :required_defaults, :ast, :scope_options
@@ -375,9 +376,8 @@ module ActionDispatch
 
           def route_source_location
             if Mapper.route_source_locations
-              action_dispatch_dir = File.expand_path("..", __dir__)
               Thread.each_caller_location do |location|
-                next if location.path.start_with?(action_dispatch_dir)
+                next if location.path.start_with?(ACTION_DISPATCH_DIR)
 
                 cleaned_path = Mapper.backtrace_cleaner.clean_frame(location.path)
                 next if cleaned_path.nil?
