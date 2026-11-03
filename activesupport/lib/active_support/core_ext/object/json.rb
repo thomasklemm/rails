@@ -186,12 +186,14 @@ class Hash
       self
     end
 
+    # Symbol#name is the frozen String that Hash#[]= would intern the
+    # Symbol#to_s copy into, so the key is the same object without the copy.
     result = {}
     if options
       options = options.dup.freeze unless options.frozen?
-      subset.each { |k, v| result[k.to_s] = v.as_json(options) }
+      subset.each { |k, v| result[Symbol === k ? k.name : k.to_s] = v.as_json(options) }
     else
-      subset.each { |k, v| result[k.to_s] = v.as_json }
+      subset.each { |k, v| result[Symbol === k ? k.name : k.to_s] = v.as_json }
     end
     result
   end

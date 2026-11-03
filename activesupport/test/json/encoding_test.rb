@@ -380,9 +380,30 @@ class TestJSONEncoding < ActiveSupport::TestCase
     assert_equal({ "foo" => :default }, json)
   end
 
+  def test_hash_as_json_does_not_copy_symbol_keys
+    symbols = { id: 1, name: "David", email: nil }
+    strings = { "id" => 1, "name" => "David", "email" => nil }
+    assert_equal strings, symbols.as_json
+    assert_same :name.name, symbols.as_json.keys[1]
+
+    # The second round runs on warm call sites.
+    counts = 2.times.map do
+      [allocations { strings.as_json }, allocations { symbols.as_json },
+        allocations { strings.as_json({}) }, allocations { symbols.as_json({}) }]
+    end
+    assert_equal counts.last[0], counts.last[1]
+    assert_equal counts.last[2], counts.last[3]
+  end
+
   def test_array_as_json_without_options
     json = [ OptionsTest.new ].as_json
     assert_equal([:default], json)
+  end
+
+  def allocations
+    before = GC.stat(:total_allocated_objects)
+    yield
+    GC.stat(:total_allocated_objects) - before
   end
 
   UserNameAndEmail = Struct.new(:name, :email)
