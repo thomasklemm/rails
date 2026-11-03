@@ -71,10 +71,10 @@ module ActionView
       @raw_buffer = other.to_str
     end
 
-    def capture(*args)
+    def capture(*)
       new_buffer = +""
       old_buffer, @raw_buffer = @raw_buffer, new_buffer
-      yield(*args)
+      yield(*)
       new_buffer.html_safe
     ensure
       @raw_buffer = old_buffer
