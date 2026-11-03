@@ -33,23 +33,23 @@ module ActiveRecord
 
         def immediate_future_classes
           if parent.done?
-            loaders.flat_map(&:future_classes).uniq
+            loaders.flat_map(&:future_classes).tap(&:uniq!)
           else
-            likely_reflections.reject(&:polymorphic?).flat_map do |reflection|
+            likely_reflections.delete_if(&:polymorphic?).flat_map do |reflection|
               reflection.
                 chain.
                 map(&:klass)
-            end.uniq
+            end.tap(&:uniq!)
           end
         end
 
         def target_classes
           if done?
-            preloaded_records.map(&:klass).uniq
+            preloaded_records.map(&:klass).tap(&:uniq!)
           elsif parent.done?
-            loaders.map(&:klass).uniq
+            loaders.map(&:klass).tap(&:uniq!)
           else
-            likely_reflections.reject(&:polymorphic?).map(&:klass).uniq
+            likely_reflections.delete_if(&:polymorphic?).map!(&:klass).tap(&:uniq!)
           end
         end
 
