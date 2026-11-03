@@ -1,3 +1,16 @@
+*   Deprecate passing the table name to `Arel::Table.new` positionally.
+
+    `Arel::Table.new` now takes the table name as the `name:` keyword. The
+    positional form that Rails 8.1 and earlier accept, and that many gems and
+    apps use, keeps working with a deprecation warning.
+
+    ```ruby
+    Arel::Table.new(:users)        # deprecated
+    Arel::Table.new(name: :users)
+    ```
+
+    *Thomas Klemm*
+
 *   Add `config.active_record.association_scope_keeps_owner_conditions` to
     always apply the conditions tying the records of an association to the
     owner, and deprecate removing them with the association scope.
