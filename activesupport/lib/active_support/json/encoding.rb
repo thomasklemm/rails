@@ -82,6 +82,8 @@ module ActiveSupport
       HTML_ENTITIES_REGEX = Regexp.union(*(ESCAPED_CHARS.keys - [U2028, U2029])).freeze
       FULL_ESCAPE_REGEX = Regexp.union(*ESCAPED_CHARS.keys).freeze
       JS_SEPARATORS_REGEX = Regexp.union(U2028, U2029).freeze
+      HTML_ENTITIES = ESCAPED_CHARS.except(U2028, U2029).freeze
+      JS_SEPARATORS = ESCAPED_CHARS.slice(U2028, U2029).freeze
 
       UTF8_ESCAPED_CHARS = {
         "\u2028" => '\u2028',
@@ -266,14 +268,13 @@ module ActiveSupport
             else
               def escape!(json)
                 json.force_encoding(::Encoding::BINARY)
-                if @options.fetch(:escape_html_entities, Encoding.escape_html_entities_in_json)
-                  if Encoding.escape_js_separators_in_json
-                    json.gsub!(FULL_ESCAPE_REGEX, ESCAPED_CHARS)
-                  else
-                    json.gsub!(HTML_ENTITIES_REGEX, ESCAPED_CHARS)
-                  end
-                elsif Encoding.escape_js_separators_in_json
-                  json.gsub!(JS_SEPARATORS_REGEX, ESCAPED_CHARS)
+                html_entities = @options.fetch(:escape_html_entities, Encoding.escape_html_entities_in_json)
+                js_separators = Encoding.escape_js_separators_in_json
+                if html_entities
+                  HTML_ENTITIES.each_key { |char| json.gsub!(char, HTML_ENTITIES) if json.include?(char) }
+                end
+                if js_separators
+                  JS_SEPARATORS.each_key { |char| json.gsub!(char, JS_SEPARATORS) if json.include?(char) }
                 end
                 json.force_encoding(::Encoding::UTF_8)
               end
