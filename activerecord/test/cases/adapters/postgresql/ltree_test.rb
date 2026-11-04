@@ -33,6 +33,15 @@ class PostgresqlLtreeTest < ActiveRecord::PostgreSQLTestCase
     assert_not_predicate type, :binary?
   end
 
+  def test_array_column_with_default
+    @connection.add_column "ltrees", "paths", :ltree, array: true, default: ["1.2"]
+    Ltree.reset_column_information
+
+    assert_equal ["1.2"], Ltree.new.paths
+  ensure
+    Ltree.reset_column_information
+  end
+
   def test_write
     ltree = Ltree.new(path: "1.2.3.4")
     assert ltree.save!

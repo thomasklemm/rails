@@ -188,7 +188,9 @@ module ActiveRecord
 
         # TODO: Make this method private after we release 8.1.
         def lookup_cast_type(sql_type) # :nodoc:
-          super(query_value("SELECT #{quote(sql_type)}::regtype::oid").to_i)
+          oid = query_value("SELECT #{quote(sql_type)}::regtype::oid").to_i
+          load_additional_types([oid]) unless type_map.key?(oid)
+          super(oid)
         end
 
         def type_casted_binds(binds) # :nodoc:
