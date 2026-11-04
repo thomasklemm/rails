@@ -270,7 +270,9 @@ module ActiveSupport
                   if Encoding.escape_js_separators_in_json
                     json.gsub!(FULL_ESCAPE_REGEX, ESCAPED_CHARS)
                   else
-                    json.gsub!(HTML_ENTITIES_REGEX, ESCAPED_CHARS)
+                    json.gsub!(">", ESCAPED_CHARS) if json.include?(">")
+                    json.gsub!("<", ESCAPED_CHARS) if json.include?("<")
+                    json.gsub!("&", ESCAPED_CHARS) if json.include?("&")
                   end
                 elsif Encoding.escape_js_separators_in_json
                   json.gsub!(JS_SEPARATORS_REGEX, ESCAPED_CHARS)
