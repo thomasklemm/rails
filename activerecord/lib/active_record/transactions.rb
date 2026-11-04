@@ -464,7 +464,7 @@ module ActiveRecord
           ensure_finalize = !connection.transaction_open?
 
           implicit_persistence_transaction(connection) do
-            add_to_transaction(ensure_finalize || has_transactional_callbacks?)
+            connection.add_transaction_record(self, ensure_finalize || has_transactional_callbacks?)
             remember_transaction_record_state
 
             status = yield
