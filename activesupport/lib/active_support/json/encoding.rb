@@ -266,16 +266,16 @@ module ActiveSupport
             else
               def escape!(json)
                 json.force_encoding(::Encoding::BINARY)
-                if @options.fetch(:escape_html_entities, Encoding.escape_html_entities_in_json)
-                  if Encoding.escape_js_separators_in_json
-                    json.gsub!(FULL_ESCAPE_REGEX, ESCAPED_CHARS)
-                  else
-                    json.gsub!(">", ESCAPED_CHARS) if json.include?(">")
-                    json.gsub!("<", ESCAPED_CHARS) if json.include?("<")
-                    json.gsub!("&", ESCAPED_CHARS) if json.include?("&")
-                  end
-                elsif Encoding.escape_js_separators_in_json
-                  json.gsub!(JS_SEPARATORS_REGEX, ESCAPED_CHARS)
+                html_entities = @options.fetch(:escape_html_entities, Encoding.escape_html_entities_in_json)
+                js_separators = Encoding.escape_js_separators_in_json
+                if html_entities
+                  json.gsub!(">", ESCAPED_CHARS) if json.include?(">")
+                  json.gsub!("<", ESCAPED_CHARS) if json.include?("<")
+                  json.gsub!("&", ESCAPED_CHARS) if json.include?("&")
+                end
+                if js_separators
+                  json.gsub!(U2028, ESCAPED_CHARS) if json.include?(U2028)
+                  json.gsub!(U2029, ESCAPED_CHARS) if json.include?(U2029)
                 end
                 json.force_encoding(::Encoding::UTF_8)
               end
