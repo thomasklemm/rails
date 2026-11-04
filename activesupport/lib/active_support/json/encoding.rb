@@ -82,8 +82,6 @@ module ActiveSupport
       HTML_ENTITIES_REGEX = Regexp.union(*(ESCAPED_CHARS.keys - [U2028, U2029])).freeze
       FULL_ESCAPE_REGEX = Regexp.union(*ESCAPED_CHARS.keys).freeze
       JS_SEPARATORS_REGEX = Regexp.union(U2028, U2029).freeze
-      HTML_ENTITIES = ESCAPED_CHARS.except(U2028, U2029).freeze
-      JS_SEPARATORS = ESCAPED_CHARS.slice(U2028, U2029).freeze
 
       UTF8_ESCAPED_CHARS = {
         "\u2028" => '\u2028',
@@ -271,10 +269,13 @@ module ActiveSupport
                 html_entities = @options.fetch(:escape_html_entities, Encoding.escape_html_entities_in_json)
                 js_separators = Encoding.escape_js_separators_in_json
                 if html_entities
-                  HTML_ENTITIES.each_key { |char| json.gsub!(char, HTML_ENTITIES) if json.include?(char) }
+                  json.gsub!(">", ESCAPED_CHARS) if json.include?(">")
+                  json.gsub!("<", ESCAPED_CHARS) if json.include?("<")
+                  json.gsub!("&", ESCAPED_CHARS) if json.include?("&")
                 end
                 if js_separators
-                  JS_SEPARATORS.each_key { |char| json.gsub!(char, JS_SEPARATORS) if json.include?(char) }
+                  json.gsub!(U2028, ESCAPED_CHARS) if json.include?(U2028)
+                  json.gsub!(U2029, ESCAPED_CHARS) if json.include?(U2029)
                 end
                 json.force_encoding(::Encoding::UTF_8)
               end
