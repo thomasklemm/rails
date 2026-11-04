@@ -311,9 +311,12 @@ class Array # :nodoc:
 
   # Array#to_h sizes the hash for the array up front, so it stays embedded up
   # to 8 entries, where Enumerable#index_with's growing hash would move to the
-  # C heap.
+  # C heap. Array#to_h doesn't call #each, so subclasses, which may override
+  # it, use Enumerable#index_with.
   def index_with(default = (no_default = true))
-    if block_given?
+    if !instance_of?(Array)
+      no_default ? super() : super(default)
+    elsif block_given?
       to_h { |elem| [elem, yield(elem)] } # rubocop:disable Rails/IndexWith
     elsif no_default
       to_enum(:index_with) { size }

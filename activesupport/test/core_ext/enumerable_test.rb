@@ -286,6 +286,12 @@ class EnumerableTests < ActiveSupport::TestCase
     point = Struct.new(:x, :y).new(3, 4)
     assert_equal({ 3 => 6, 4 => 8 }, point.index_with { |value| value * 2 })
     assert_equal({ [:x, 3] => 0, [:y, 4] => 0 }, point.each_pair.index_with(0))
+
+    tens = Class.new(Array) { def each = super { |value| yield value * 10 } }[1, 2]
+    assert_equal({ 10 => 20, 20 => 40 }, tens.index_with { |value| value * 2 })
+    assert_equal({ 10 => 0, 20 => 0 }, tens.index_with(0))
+    assert_equal({ 10 => nil, 20 => nil }, tens.index_with(nil))
+    assert_equal({ 10 => 10, 20 => 20 }, tens.index_with.each(&:itself))
   end
 
   def test_many
