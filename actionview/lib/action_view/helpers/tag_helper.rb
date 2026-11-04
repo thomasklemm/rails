@@ -1643,7 +1643,7 @@ module ActionView
             case value
             when Array, Hash
               value = TagHelper.build_tag_values(value) if key == "class"
-              value = escape ? @view_context.safe_join(value, " ") : value.join(" ")
+              value = escape ? value.flatten.map! { |v| ERB::Util.unwrapped_html_escape(v) }.join(" ") : value.join(" ")
             when Regexp
               value = escape ? ERB::Util.unwrapped_html_escape(value.source) : value.source
             when Symbol

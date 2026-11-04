@@ -86,6 +86,12 @@ class TagHelperTest < ActionView::TestCase
     assert_equal("<input value=\"123 456\" />", str)
   end
 
+  def test_tag_options_with_nested_array_escapes_each_value
+    str = tag(:input, value: ["a", ["<b>", "<c>".html_safe]])
+
+    assert_equal("<input value=\"a &lt;b&gt; <c>\" />", str)
+  end
+
   def test_tag_options_with_array_of_random_objects
     klass = Class.new do
       def to_s
