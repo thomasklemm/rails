@@ -79,16 +79,21 @@ module ActiveRecord
             )
           SQL
 
+          def group_by_table(rows, tables)
+            rows = rows.group_by { |row| row["table_name"].downcase(:ascii) }
+            tables.index_with { |table| rows[table.downcase(:ascii)] }.compact
+          end
+
           def fetch_indexes(tables)
             return {} if tables.empty?
 
-            rows = query_all(<<~SQL).group_by { |row| row["table_name"] }
+            rows = group_by_table(query_all(<<~SQL), tables)
               #{MASTER_CTE}
               SELECT m.name AS table_name, i.name, i."unique"
               FROM master m
               JOIN pragma_index_list(m.name) i
               WHERE m.type = 'table'
-                AND m.name IN (#{quoted_table_names(tables)})
+                AND m.name COLLATE NOCASE IN (#{quoted_table_names(tables)})
                 AND i.name NOT GLOB 'sqlite_*'
             SQL
 
