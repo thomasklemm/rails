@@ -206,7 +206,7 @@ module ActiveModel
   end
 
   class LazyAttributeSet < AttributeSet # :nodoc:
-    def initialize(values, types, additional_types, default_attributes, attributes, default_keys)
+    def initialize(values, types, additional_types, default_attributes, attributes, default_keys, materialized: false)
       super(attributes)
       @values = values
       @types = types
@@ -214,7 +214,7 @@ module ActiveModel
       @default_attributes = default_attributes
       @default_keys = default_keys
       @casted_values = values.is_a?(IndexedRow) ? values.new_empty_mutable_row : {}
-      @materialized = false
+      @materialized = materialized
     end
 
     def key?(name)
@@ -222,6 +222,9 @@ module ActiveModel
     end
 
     def keys
+      # Materializing puts every key in @attributes, in this order.
+      return super if @materialized
+
       keys = values.keys | types.keys | @attributes.keys
       keys.keep_if { |name| self[name].initialized? }
     end
@@ -270,7 +273,8 @@ module ActiveModel
         additional_types.dup,
         default_attributes.dup,
         attributes.transform_values(&:deep_dup),
-        @default_keys
+        @default_keys,
+        materialized: true
       )
     end
 
@@ -281,7 +285,8 @@ module ActiveModel
         additional_types,
         default_attributes,
         attributes.transform_values(&block),
-        @default_keys
+        @default_keys,
+        materialized: true
       )
     end
 
