@@ -36,6 +36,18 @@ class ObjectTryTest < ActiveSupport::TestCase
     assert_equal 5, @string.try(:size)
   end
 
+  def test_keyword_forwarding
+    object = Class.new { def echo(*args, **kwargs, &block) = [args, kwargs, block&.call] }.new
+
+    [:try, :try!].each do |method|
+      assert_equal [[], {}, nil], object.public_send(method, :echo, **{})
+      assert_equal [[{ a: 1 }], {}, nil], object.public_send(method, :echo, { a: 1 })
+      assert_equal [[], { a: 1 }, nil], object.public_send(method, :echo, a: 1)
+      assert_equal [[], { a: 1 }, :block], object.public_send(method, :echo, a: 1) { :block }
+      assert_raise(TypeError) { object.public_send(method, a: 1) { :block } }
+    end
+  end
+
   def test_argument_forwarding
     assert_equal "Hey", @string.try(:sub, "llo", "y")
   end
