@@ -97,6 +97,42 @@ Rails.application.config.action_view.erb_implementation = :erubi
 
 Applications with a custom ERB implementation should set it through `config.action_view.erb_implementation`, since the framework default replaces an `ActionView::Base.erb_implementation` assignment made in an initializer.
 
+### `link_to`, `button_to` and `current_page?` moved to `ActionView::Helpers::NavigationHelper`
+
+`link_to`, `button_to`, `current_page?`, `link_to_if`, `link_to_unless` and
+`link_to_unless_current` are now defined in `ActionView::Helpers::NavigationHelper`
+instead of `ActionView::Helpers::UrlHelper`. Views and helpers are unaffected,
+but a class that includes `UrlHelper` or `FormHelper` without `NavigationHelper`
+no longer defines them. If the class also forwards missing methods to a
+view, for example with `delegate_missing_to :view_context`, it doesn't raise:
+`link_to` runs in the view instead, without the class's own `capture`, so a
+block's markup can come out as escaped HTML.
+
+Include `NavigationHelper`, which includes `UrlHelper`:
+
+```ruby
+# Before
+class LinkPresenter
+  include ActionView::Helpers::UrlHelper
+end
+
+# After
+class LinkPresenter
+  include ActionView::Helpers::NavigationHelper
+end
+```
+
+`NavigationHelper` doesn't exist before Rails 8.2. Code that also supports
+earlier versions can keep including `UrlHelper` and include `NavigationHelper`
+only where it's defined:
+
+```ruby
+class LinkPresenter
+  include ActionView::Helpers::UrlHelper
+  include ActionView::Helpers::NavigationHelper if defined?(ActionView::Helpers::NavigationHelper)
+end
+```
+
 ### `:controller` and `:action` may no longer be used as dynamic route segments
 
 Routes such as the "default route" that older applications still carry in
