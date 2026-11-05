@@ -452,7 +452,7 @@ module ActiveSupport
       new_zone ||= time_zone
       periods = new_zone.periods_for_local(new_time)
 
-      self.class.new(nil, new_zone, new_time, periods.include?(period) ? period : nil)
+      self.class.new(nil, new_zone, new_time, periods.include?(period) ? period : single_period(periods, new_time))
     end
 
     # Uses Date to provide precise Time calculations for years, months, and days
@@ -658,10 +658,17 @@ module ActiveSupport
         ActiveSupport::Duration === obj && obj.variable?
       end
 
+      # The constructor would look this UTC Time up unchanged; zones without transitions keep their shared period.
+      def single_period(periods, time)
+        if periods.one? && time.instance_of?(::Time) && time.utc? && periods.first.instance_of?(::TZInfo::TransitionsTimezonePeriod)
+          periods.first
+        end
+      end
+
       def wrap_with_time_zone(time)
         if time.acts_like?(:time)
           periods = time_zone.periods_for_local(time)
-          self.class.new(nil, time_zone, time, periods.include?(period) ? period : nil)
+          self.class.new(nil, time_zone, time, periods.include?(period) ? period : single_period(periods, time))
         elsif time.is_a?(Range)
           wrap_with_time_zone(time.begin)..wrap_with_time_zone(time.end)
         else

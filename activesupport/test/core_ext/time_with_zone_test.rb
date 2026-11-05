@@ -794,6 +794,31 @@ class TimeWithZoneTest < ActiveSupport::TestCase
     assert_equal twz, twz.change(min: 0)
   end
 
+  def test_change_offset_of_julian_datetime_across_dst_boundary
+    julian = DateTime.new(2026, 10, 20, 12, 0, 0, 0, Date::JULIAN)
+    twz = ActiveSupport::TimeWithZone.new(nil, ActiveSupport::TimeZone["America/New_York"], julian)
+    changed = twz.change(offset: "+01:00")
+    assert_equal 7200, changed.utc_offset
+    assert_equal "CEST", changed.zone
+    assert_predicate changed, :dst?
+    assert_equal Time.utc(2026, 10, 20, 10), changed.utc
+  end
+
+  def test_change_into_dst_gap_with_fractional_offset
+    twz = ActiveSupport::TimeWithZone.new(Time.utc(2026, 7, 1, 10), ActiveSupport::TimeZone["Amsterdam"])
+    changed = twz.change(month: 3, day: 29, hour: 2, offset: 3600.5)
+    assert_equal 7200, changed.utc_offset
+    assert_equal "CEST", changed.zone
+    assert_predicate changed, :dst?
+    assert_equal Time.utc(2026, 3, 29, 1, 0, 0.5), changed.utc
+  end
+
+  def test_change_zone_to_utc_keeps_the_shared_period
+    twz = ActiveSupport::TimeWithZone.new(Time.utc(2026, 7, 1, 10), ActiveSupport::TimeZone["Amsterdam"])
+    utc = ActiveSupport::TimeZone["UTC"]
+    assert_same utc.period_for_utc(Time.utc(2000)), twz.change(zone: utc).period
+  end
+
   def test_round_at_dst_boundary
     twz = ActiveSupport::TimeWithZone.new(Time.at(1319936400).getutc, ActiveSupport::TimeZone["Madrid"])
     assert_equal twz, twz.round
