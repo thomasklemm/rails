@@ -571,25 +571,21 @@ module ActiveRecord
         end
 
         def fetch_foreign_keys(tables)
-          return {} if tables.empty?
+          structures = table_structures(tables)
+          return tables.index_with { [] } if structures.empty?
 
           # SQLite returns 1 row for each column of composite foreign keys.
-          fk_infos = query_all(<<~SQL).group_by { |row| row["table_name"] }
-            #{MASTER_CTE}
-            SELECT m.name AS table_name, fk.id, fk.seq, fk."table", fk."from", fk."to", fk.on_update, fk.on_delete
-            FROM master m
-            JOIN pragma_foreign_key_list(m.name) fk
-            WHERE m.type = 'table'
-              AND m.name IN (#{quoted_table_names(tables)})
+          fk_infos = query_all(<<~SQL).group_by { |row| row.values_at("schema", "table_name") }
+            SELECT r.column1 AS schema, r.column2 AS table_name, fk.id, fk.seq, fk."table", fk."from", fk."to", fk.on_update, fk.on_delete
+            FROM (VALUES #{structures.values.map(&:last).uniq.map { |schema, name| "(#{quote(schema)}, #{quote(name)})" }.join(", ")}) r
+            JOIN pragma_foreign_key_list(r.column2, r.column1) fk
           SQL
 
-          structures = table_structures(tables)
-
           tables.index_with do |table_name|
-            create_table_sql, structure = structures[table_name] || [nil, []]
+            create_table_sql, structure, stored = structures[table_name] || [nil, []]
             column_strings = split_table_structure_sql(create_table_sql, structure.map { |column| column["name"] })
 
-            build_foreign_keys(table_name, fk_infos.fetch(table_name, []), column_strings)
+            build_foreign_keys(table_name, fk_infos.fetch(stored, []), column_strings)
           end
         end
 
@@ -936,25 +932,59 @@ module ActiveRecord
         # auto increment and generated columns are only named there. It repeats once
         # per column, so it is read from the first row. A view has a statement too,
         # but it describes the query rather than any columns.
+        #
+        # SQLite looks a name up among the temporary tables first and ignores ASCII case,
+        # so every temporary name comes along, and a name not stored as asked is read
+        # again with every permanent name.
         def table_structures(tables)
           return {} if tables.empty?
 
           fields = ["name", "type", "notnull", "dflt_value", "pk"]
           fields << "hidden" if supports_virtual_columns?
+          columns = ["cid", *fields].map { |field| "t.#{quote_column_name(field)}" }.join(", ")
+          nulls = Array.new(fields.size + 1, "NULL").join(", ")
 
-          query_all(<<~SQL).group_by { |row| row["table_name"] }
-            #{MASTER_CTE}
-            SELECT m.name AS table_name, CASE WHEN m.type = 'table' THEN m.sql END AS create_table_sql,
-                   #{fields.map { |field| "t.#{quote_column_name(field)}" }.join(", ")}
-            FROM master m
-            JOIN pragma_#{table_info_pragma}(m.name) t
-            WHERE m.type IN ('table', 'view')
-              AND m.name IN (#{quoted_table_names(tables)})
-            ORDER BY m.name, t.cid
+          catalog, rows = query_all(<<~SQL).partition { |row| row["cid"].nil? }
+            SELECT c.name AS table_name, c.schema, c.type AS object_type, c.sql AS create_table_sql, #{columns}
+            FROM (
+              SELECT 'main' AS schema, name, type, sql FROM sqlite_master
+              UNION ALL
+              SELECT 'temp', name, type, sql FROM sqlite_temp_master
+            ) c
+            JOIN pragma_#{table_info_pragma}(c.name) t
+            WHERE c.type IN ('table', 'view')
+              AND c.name IN (#{quoted_table_names(tables)})
+              AND (c.schema = 'temp' OR c.name NOT IN (SELECT name FROM sqlite_temp_master WHERE type IN ('table', 'view')))
+            UNION ALL
+            SELECT name, 'temp', type, sql, #{nulls} FROM sqlite_temp_master WHERE type IN ('table', 'view')
+            ORDER BY table_name, cid
           SQL
-            .transform_values do |group|
-              [group.first["create_table_sql"], group.map { |row| row.except("table_name", "create_table_sql") }]
+          structures = rows.group_by { |row| row["table_name"] }
+          temporary = catalog.index_by { |row| row["table_name"].downcase(:ascii) }
+          permanent = structures.each_value.filter_map { |group| group.first if group.first["schema"] == "main" }.index_by { |row| row["table_name"].downcase(:ascii) }
+          stored = ->(table) { temporary[table.downcase(:ascii)] || permanent[table.downcase(:ascii)] }
+
+          missing = tables.uniq.reject { |table| structures.key?(stored[table]&.fetch("table_name")) }
+          if missing.any?
+            catalog, rows = query_all(<<~SQL).partition { |row| row["cid"].nil? }
+              SELECT r.column1 AS table_name, NULL AS schema, NULL AS object_type, NULL AS create_table_sql, #{columns}
+              FROM (VALUES #{missing.map { |table| "(#{quote(table)}, #{quote(stored[table]&.fetch("schema") || "main")})" }.join(", ")}) r
+              JOIN pragma_#{table_info_pragma}(r.column1, r.column2) t
+              UNION ALL
+              SELECT name, 'main', type, sql, #{nulls} FROM sqlite_master WHERE type IN ('table', 'view')
+              ORDER BY table_name, cid
+            SQL
+            permanent = catalog.index_by { |row| row["table_name"].downcase(:ascii) }
+            rows.group_by { |row| row["table_name"] }.each do |table, group|
+              structures[stored[table]["table_name"]] ||= group if stored[table]
             end
+          end
+
+          tables.filter_map do |table|
+            next unless (object = stored[table]) && (group = structures[object["table_name"]])
+
+            [table, [(object["create_table_sql"] if object["object_type"] == "table"), group.map { |row| row.slice(*fields) }, object.values_at("schema", "table_name")]]
+          end.to_h
         end
 
         def arel_visitor

@@ -74,8 +74,6 @@ module ActiveRecord
           MASTER_CTE = <<~SQL
             WITH master AS (
               SELECT name, type, sql FROM sqlite_master
-              WHERE type NOT IN ('table', 'view')
-                OR name NOT IN (SELECT name FROM sqlite_temp_master WHERE type IN ('table', 'view'))
               UNION ALL
               SELECT name, type, sql FROM sqlite_temp_master
             )
@@ -85,13 +83,12 @@ module ActiveRecord
             return {} if tables.empty?
 
             rows = query_all(<<~SQL).group_by { |row| row["table_name"] }
-              #{MASTER_CTE}
-              SELECT m.name AS table_name, i.name, i."unique"
-              FROM master m
-              JOIN pragma_index_list(m.name) i
-              WHERE m.type = 'table'
-                AND m.name IN (#{quoted_table_names(tables)})
-                AND i.name NOT GLOB 'sqlite_*'
+              SELECT r.column1 AS table_name, i.name, i."unique"
+              FROM (VALUES #{tables.uniq.map { |table| "(#{quote(table)})" }.join(", ")}) r
+              JOIN pragma_index_list(r.column1) i
+              WHERE i.name NOT GLOB 'sqlite_*'
+                AND (EXISTS (SELECT 1 FROM pragma_index_list(r.column1, 'temp'))
+                  OR EXISTS (SELECT 1 FROM pragma_index_list(r.column1, 'main')))
             SQL
 
             details = index_details(rows.each_value.flat_map { |group| group.map { |row| row["name"] } })
