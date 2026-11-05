@@ -1547,8 +1547,14 @@ module ActionView
           options.each_pair do |key, value|
             next if key.blank?
 
-            name = Symbol === key ? key.name : key.to_s
-            next if name.blank?
+            if Symbol === key
+              name = key.name
+              next if name.blank?
+            else
+              name = key.to_s
+              # When to_s returns the key itself, its blank? was just checked.
+              next if !name.equal?(key) && name.blank?
+            end
 
             type = TAG_TYPES[key]
             if type != :aria && type != :class && value.is_a?(Hash)

@@ -21,6 +21,18 @@ class TagHelperTest < ActionView::TestCase
     end
   end
 
+  class BlankWhenConverted < String
+    def to_s
+      " "
+    end
+  end
+
+  class NeverBlank < String
+    def blank?
+      false
+    end
+  end
+
   def test_tag
     assert_equal "<br />", tag("br")
     assert_equal "<br clear=\"left\" />", tag(:br, clear: "left")
@@ -284,6 +296,31 @@ class TagHelperTest < ActionView::TestCase
     assert_equal "<img />", tag("img", { [] => "/onerror=alert(1)//" })
     assert_equal "<img />", tag("img", { data: { false => "x" } })
     assert_equal "<img />", tag("img", { aria: { false => "x" } })
+
+    name = +" "
+    def name.to_s = "title"
+    name.freeze
+    assert_equal "<img />", tag("img", name => "/onerror=alert(1)//")
+
+    name = +"title"
+    def name.blank? = true
+    name.freeze
+    assert_equal "<img />", tag("img", name => "/onerror=alert(1)//")
+  end
+
+  def test_tag_with_whitespace_string_attribute_name_is_skipped
+    assert_equal "<img />", tag("img", " " => "/onerror=alert(1)//")
+    assert_equal "<img />", tag("img", "\t\n" => "/onerror=alert(1)//")
+  end
+
+  def test_tag_with_string_attribute_name_that_converts_to_blank_is_skipped
+    name = +"a"
+    def name.to_s = " "
+    name.freeze
+
+    assert_equal "<img />", tag("img", name => "/onerror=alert(1)//")
+    assert_equal "<img />", tag("img", BlankWhenConverted.new("a") => "/onerror=alert(1)//")
+    assert_equal "<img />", tag("img", NeverBlank.new(" ") => "/onerror=alert(1)//")
   end
 
   def test_tag_with_attribute_name_that_changes_when_converted_generates_valid_markup
