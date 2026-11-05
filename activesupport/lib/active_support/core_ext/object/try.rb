@@ -173,7 +173,7 @@ class NilClass
   # ```ruby
   # @person.try(:children).try(:first).try(:name)
   # ```
-  def try(*, &)
+  def try(...)
     nil
   end
 
@@ -182,7 +182,7 @@ class NilClass
   # ```ruby
   # nil.try!(:name) # => nil
   # ```
-  def try!(*, &)
+  def try!(...)
     nil
   end
 end
