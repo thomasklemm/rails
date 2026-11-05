@@ -271,11 +271,11 @@ module ActiveRecord
           pool_manager = handler.send(:connection_name_to_pool_manager)[name]
           pool_manager.shard_names.each do |shard_name|
             writing_pool_config = pool_manager.get_pool_config(ActiveRecord.writing_role, shard_name)
-            @saved_pool_configs[name][shard_name] ||= {}
             pool_manager.role_names.each do |role|
               next unless pool_config = pool_manager.get_pool_config(role, shard_name)
               next if pool_config == writing_pool_config
 
+              @saved_pool_configs[name][shard_name] ||= {}
               @saved_pool_configs[name][shard_name][role] = pool_config
               pool_manager.set_pool_config(role, shard_name, writing_pool_config)
             end
@@ -284,6 +284,8 @@ module ActiveRecord
       end
 
       def teardown_shared_connection_pool
+        return if @saved_pool_configs.empty?
+
         handler = main_ractor_connection_handler
         removed_pool_configs = []
         pool_managers = handler.send(:connection_name_to_pool_manager)
@@ -302,6 +304,8 @@ module ActiveRecord
         end
 
         @saved_pool_configs.clear
+
+        return if removed_pool_configs.empty?
 
         remaining_pool_configs = pool_managers.values.flat_map(&:pool_configs)
         removed_pool_configs.compact.uniq.each do |pool_config|
