@@ -303,6 +303,8 @@ module ActiveRecord
 
         @saved_pool_configs.clear
 
+        return if removed_pool_configs.empty?
+
         remaining_pool_configs = pool_managers.values.flat_map(&:pool_configs)
         removed_pool_configs.compact.uniq.each do |pool_config|
           pool_config.disconnect! unless remaining_pool_configs.include?(pool_config)

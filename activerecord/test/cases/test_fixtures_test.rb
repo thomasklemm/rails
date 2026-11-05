@@ -127,6 +127,49 @@ class TestFixturesTest < ActiveRecord::TestCase
       clean_up_connection_handler
     end
 
+    def test_late_readers_keep_shard_order_when_restored_or_disconnected
+      db_config = ActiveRecord::Base.configurations.configs_for(env_name: "arunit", name: "primary")
+      old_handler = ActiveRecord::Base.connection_handler
+      handler = ActiveRecord::Base.connection_handler = ActiveRecord::ConnectionAdapters::ConnectionHandler.new
+
+      orders = [false, true].map do |remove_readers|
+        pool_manager = ActiveRecord::ConnectionAdapters::PoolManager.new
+        handler.send(:connection_name_to_pool_manager)["ActiveRecord::Base"] = pool_manager
+        readers = {}
+        [:a, :b].each do |shard|
+          writer = ActiveRecord::ConnectionAdapters::PoolConfig.new(ActiveRecord::Base, db_config, :writing, shard)
+          pool_manager.set_pool_config(:writing, shard, writer)
+          readers[shard] = ActiveRecord::ConnectionAdapters::PoolConfig.new(ActiveRecord::Base, db_config, :reading, shard)
+        end
+        pool_manager.set_pool_config(:reading, :b, readers[:b])
+        setup_shared_connection_pool
+        pool_manager.set_pool_config(:reading, :a, readers[:a])
+        setup_shared_connection_pool
+
+        order = []
+        if remove_readers
+          readers.each do |shard, reader|
+            pool_manager.remove_pool_config(:reading, shard)
+            reader.define_singleton_method(:disconnect!) do
+              order << shard
+              super()
+            end
+          end
+        else
+          pool_manager.define_singleton_method(:set_pool_config) do |role, shard, config|
+            order << shard if role == :reading
+            super(role, shard, config)
+          end
+        end
+        teardown_shared_connection_pool
+        order
+      end
+
+      assert_equal [[:a, :b], [:a, :b]], orders
+    ensure
+      ActiveRecord::Base.connection_handler = old_handler
+    end
+
     def test_transactional_tests_per_db_explicitly_disabled
       tmp_dir = Dir.mktmpdir
       File.write(File.join(tmp_dir, "zines.yml"), <<~YML)
