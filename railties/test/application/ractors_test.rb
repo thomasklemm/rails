@@ -117,6 +117,22 @@ if RUBY_VERSION >= "4.0" && ENV["RACK"] == "head"
         assert_equal "post", on_ractor { PostsController._wrapper_options.name }
       end
 
+      test "ractorize! freezes the parameter parsers registered during boot" do
+        app_file "config/initializers/parameter_parsers.rb", <<~RUBY
+          ActionDispatch::Request.parameter_parsers[:xml] = Ractor.shareable_lambda { |raw_post| { "xml" => raw_post } }
+        RUBY
+
+        app "production"
+
+        assert_not_predicate ActionDispatch::Request.parameter_parsers, :frozen?
+
+        ractorize!
+
+        assert_predicate ActionDispatch::Request.parameter_parsers, :frozen?
+        assert_equal [:json, :xml], on_ractor { ActionDispatch::Request.parameter_parsers.keys }
+        assert_equal({ "xml" => "<a/>" }, on_ractor { ActionDispatch::Request.parameter_parsers[:xml].call("<a/>") })
+      end
+
       test "ractorize! makes Rails.logger shareable" do
         app "production"
 

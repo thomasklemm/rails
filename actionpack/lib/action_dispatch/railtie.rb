@@ -109,6 +109,7 @@ module ActionDispatch
         ActiveSupport::Ractors.make_shareable(ActionDispatch::ExceptionWrapper.rescue_templates)
         ActiveSupport::Ractors.make_shareable(ActionDispatch::ExceptionWrapper.wrapper_exceptions)
         ActiveSupport::Ractors.make_shareable(ActionDispatch::ExceptionWrapper.silent_exceptions)
+        ActionDispatch::Request.parameter_parsers.freeze
       end
     end
   end
