@@ -176,6 +176,39 @@ Book.not_published # => [book2]
 Book.not_published # => [book2, book3]
 ```
 
+### Loading fixtures on PostgreSQL 18.4+ acquires more locks
+
+On PostgreSQL 18.4 and later, Active Record turns off foreign key checks while it
+loads fixtures or empties tables through `truncate_tables` by switching the
+enforced foreign keys in the current schemas to `NOT ENFORCED` and back, instead
+of disabling triggers. This no longer requires a superuser, but switching off
+drops the constraint triggers and switching back recreates them, and the locks
+this takes on the constraints, tables and indexes are held until the
+transaction ends. That can be substantially more locks than disabling triggers
+took.
+
+PostgreSQL keeps object locks in one server-wide shared table. Its capacity
+depends on `max_locks_per_transaction` (64 by default), the configured number of
+server processes (mostly `max_connections`) and prepared transactions. When
+parallel test workers load fixtures at the same time into databases with a few
+hundred foreign keys, they can exhaust it, intermittently and more often with
+more workers, and fail with:
+
+```
+PG::OutOfMemory: ERROR:  out of shared memory
+HINT:  You might need to increase "max_locks_per_transaction".
+```
+
+Raise the setting on the PostgreSQL server that runs the tests, for example in
+`postgresql.conf`, and restart the server:
+
+```
+max_locks_per_transaction = 256
+```
+
+The value you need depends on your schema and the number of concurrent workers;
+larger test suites may need more.
+
 Upgrading from Rails 8.0 to Rails 8.1
 -------------------------------------
 
