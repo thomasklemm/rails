@@ -129,7 +129,7 @@ class TestFixturesTest < ActiveRecord::TestCase
 
     def test_late_readers_keep_shard_order_when_restored_or_disconnected
       db_config = ActiveRecord::Base.configurations.configs_for(env_name: "arunit", name: "primary")
-      old_handler = ActiveRecord::Base.connection_handler
+      old_handler = ActiveSupport::IsolatedExecutionState[:active_record_connection_handler]
       handler = ActiveRecord::Base.connection_handler = ActiveRecord::ConnectionAdapters::ConnectionHandler.new
 
       orders = [false, true].map do |remove_readers|
