@@ -61,32 +61,28 @@ module ActiveRecord
         end
       end
 
-      attr_reader :arel, :name, :prepare, :allow_retry, :allow_async,
-                  :materialize_transactions, :batch, :pool, :session, :lock_wait,
+      attr_reader :arel, :request, :allow_async, :pool, :session, :lock_wait,
                   :event_buffer, :error, :finalized
       alias_method :finalized?, :finalized
       attr_writer :raw_sql, :session
-      attr_accessor :adapter, :binds, :ran_async, :notification_payload, :log_handle,
+      attr_accessor :adapter, :ran_async, :notification_payload, :log_handle,
                     :retry_budget
+      delegate :name, :prepare, :allow_retry, :materialize_transactions, :batch, to: :@request
 
-      def initialize(adapter:, arel: nil, raw_sql: nil, processed_sql: nil, name: "SQL", binds: [], prepare: false, allow_async: false,
+      def initialize(adapter:, request: nil, arel: nil, raw_sql: nil, processed_sql: nil, name: "SQL", binds: [], prepare: false, allow_async: false,
                      allow_retry: false, materialize_transactions: true, batch: false)
-        if arel.nil? && raw_sql.nil? && processed_sql.nil?
+        if request.nil? && arel.nil? && raw_sql.nil? && processed_sql.nil?
           raise ArgumentError, "One of arel, raw_sql, or processed_sql must be provided"
         end
 
         @adapter = adapter
         @arel = arel
         @raw_sql = raw_sql
-        @name = name
-        @binds = binds
-        @prepare = prepare
+        @request = request || QueryRequest.new(sql: processed_sql, name: name, binds: binds, prepare: prepare,
+          allow_retry: allow_retry, materialize_transactions: materialize_transactions, batch: batch)
+        @binds = nil
         @allow_async = allow_async
         @ran_async = nil
-        @allow_retry = allow_retry
-        @materialize_transactions = materialize_transactions
-        @batch = batch
-        @processed_sql = processed_sql
         @type_casted_binds = nil
         @notification_payload = nil
         @raw_result = nil
@@ -201,7 +197,21 @@ module ActiveRecord
 
       # Returns preprocessed SQL, memoized
       def processed_sql
-        @processed_sql ||= preprocess_query
+        unless @request.sql
+          sql = preprocess_query
+          @request = @request.with(sql: sql)
+        end
+        @request.sql
+      end
+
+      def binds
+        @binds ||= @request.binds
+      end
+
+      def shareable_request
+        processed_sql
+        binds
+        @request = @request.shareable
       end
 
       def type_casted_binds
@@ -384,7 +394,7 @@ module ActiveRecord
         end
 
         def mark_transaction_dirty
-          adapter.send(:dirty_current_transaction) if @materialize_transactions
+          adapter.send(:dirty_current_transaction) if materialize_transactions
         end
 
         def async_schedule!(session)
@@ -441,7 +451,8 @@ module ActiveRecord
 
         def compile_arel!
           return if @raw_sql || !@arel
-          @raw_sql, @binds, @prepare, @allow_retry = adapter.to_sql_and_binds(@arel, @binds, @prepare, @allow_retry)
+          @raw_sql, @binds, prepare, allow_retry = adapter.to_sql_and_binds(@arel, binds, self.prepare, self.allow_retry)
+          @request = @request.with(binds: @binds, prepare: prepare, allow_retry: allow_retry)
           nil
         end
 

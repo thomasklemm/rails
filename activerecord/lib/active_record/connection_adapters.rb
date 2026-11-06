@@ -81,6 +81,7 @@ module ActiveRecord
     autoload :PoolConfig
     autoload :PoolManager
     autoload :QueryIntent
+    autoload :QueryRequest
     autoload :RactorConnectionHandler, "active_record/connection_adapters/ractor_connection_handler"
     autoload :RetryBudget
     autoload :SchemaCache

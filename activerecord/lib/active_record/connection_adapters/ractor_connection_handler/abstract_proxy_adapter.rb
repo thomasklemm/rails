@@ -6,7 +6,6 @@ module ActiveRecord
   module ConnectionAdapters
     class RactorConnectionHandler # :nodoc:
       class AbstractProxyAdapter < AbstractAdapter # :nodoc:
-        autoload :QueryRequest, "active_record/connection_adapters/ractor_connection_handler/abstract_proxy_adapter/query_request"
         autoload :QueryResponse, "active_record/connection_adapters/ractor_connection_handler/abstract_proxy_adapter/query_response"
         autoload :SchemaCreationProxy, "active_record/connection_adapters/ractor_connection_handler/abstract_proxy_adapter/schema_creation_proxy"
 
@@ -297,20 +296,23 @@ module ActiveRecord
           end
 
           def perform_query(_raw_connection, intent)
-            request = QueryRequest.new(
-              sql: intent.processed_sql,
-              binds: intent.binds,
-              name: intent.name,
-              prepare: intent.prepare,
-              batch: intent.batch,
-              allow_retry: intent.allow_retry,
-              materialize_transactions: intent.materialize_transactions,
-            )
-
+            request = intent.shareable_request
             token = @connection_token
             transaction_manager_id = @main_transaction_manager_id if intent.materialize_transactions
             response = main_operation(connection_pool: @pool) do
-              request.perform(fetch_transaction_connection(token, transaction_manager_id))
+              connection = fetch_transaction_connection(token, transaction_manager_id)
+              remote_intent = QueryIntent.new(adapter: connection, request: request)
+              remote_intent.notification_payload = {}
+
+              result, warnings, last_inserted_id = connection.execute_raw_intent(remote_intent)
+
+              QueryResponse.new(
+                result,
+                remote_intent.notification_payload[:affected_rows] || result.affected_rows,
+                remote_intent.notification_payload[:row_count] || result.length,
+                last_inserted_id,
+                warnings,
+              )
             end
             intent.notification_payload[:affected_rows] = response.affected_rows
             intent.notification_payload[:row_count] = response.row_count
