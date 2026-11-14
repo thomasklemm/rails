@@ -370,6 +370,30 @@ module ActiveModel
     end
     alias :to_h :to_hash
 
+    #: () -> Hash[String, untyped]
+    def values_before_type_cast
+      materialize
+      hash = {}
+      indexes.each_key do |name|
+        if attribute = lookup(index_for_name(name))
+          hash[name] = attribute.value_before_type_cast
+        end
+      end
+      hash
+    end
+
+    #: () -> Hash[String, untyped]
+    def values_for_database
+      materialize
+      hash = {}
+      indexes.each_key do |name|
+        if attribute = lookup(index_for_name(name))
+          hash[name] = attribute.value_for_database
+        end
+      end
+      hash
+    end
+
     #: (String) ?{ (String) -> untyped } -> untyped
     def fetch_value(name, &block)
       index = index_for_name(name)
