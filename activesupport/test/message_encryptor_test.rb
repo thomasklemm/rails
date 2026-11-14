@@ -27,6 +27,13 @@ class MessageEncryptorTest < ActiveSupport::TestCase
     @data = { some: "data", now: Time.local(2010) }
   end
 
+  def test_key_len_returns_each_ciphers_key_length
+    assert_equal 32, ActiveSupport::MessageEncryptor.key_len("aes-256-gcm")
+    assert_equal 16, ActiveSupport::MessageEncryptor.key_len("aes-128-gcm")
+    assert_equal 32, ActiveSupport::MessageEncryptor.key_len("aes-256-gcm")
+    assert_raises(OpenSSL::Cipher::CipherError) { ActiveSupport::MessageEncryptor.key_len("no-such-cipher") }
+  end
+
   def test_encrypting_twice_yields_differing_cipher_text
     first_message = @encryptor.encrypt_and_sign(@data).split("--").first
     second_message = @encryptor.encrypt_and_sign(@data).split("--").first

@@ -4,6 +4,8 @@
 
 require "openssl"
 require "base64"
+require "concurrent/map"
+require "active_support/ractors"
 require "active_support/core_ext/module/attribute_accessors"
 require "active_support/inspect_backport"
 require "active_support/messages/codec"
@@ -255,8 +257,13 @@ module ActiveSupport
 
     # Given a cipher, returns the key length of the cipher to help generate the key of desired size
     def self.key_len(cipher = default_cipher)
-      OpenSSL::Cipher.new(cipher).key_len
+      key_lengths.compute_if_absent(cipher) { OpenSSL::Cipher.new(cipher).key_len }
     end
+
+    def self.key_lengths # :nodoc:
+      ActiveSupport::Ractors.store_if_absent(:active_support_message_encryptor_key_lengths) { Concurrent::Map.new }
+    end
+    private_class_method :key_lengths
 
     def create_message(value, **options) # :nodoc:
       sign(encrypt(serialize_with_metadata(value, **options)))
