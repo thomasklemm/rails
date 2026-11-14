@@ -318,8 +318,8 @@ module ActiveModel
 
     #: (String) -> ActiveModel::Attribute
     def [](name)
-      if index = index_for_name(name)
-        attribute_at(name, index)
+      if index = @indexes[name]
+        @attributes&.[](index) || default_attribute(name, index)
       else
         Attribute.null(name)
       end
@@ -343,8 +343,8 @@ module ActiveModel
     def keys
       keys = row_keys | @ctx.type_keys | cached_names
       keys.keep_if do |name|
-        index = index_for_name(name)
-        if attribute = lookup(index)
+        index = @indexes[name]
+        if attribute = @attributes&.[](index)
           attribute.initialized?
         else
           IndexedRow.key_at?(@row, index) || attribute_at(name, index).initialized?
