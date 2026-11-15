@@ -1533,7 +1533,7 @@ module ActionView
           tag_options = tag_options(options, escape) if options
 
           if escape && content.present?
-            content = ERB::Util.unwrapped_html_escape(content)
+            content = escape_html(content)
           end
           # Freezing first lets the SafeBuffer share this string's contents, instead
           # of Ruby allocating a hidden string for both to share.
@@ -1642,16 +1642,16 @@ module ActionView
 
             case value
             when String
-              value = escape ? ERB::Util.unwrapped_html_escape(value) : value.to_s
+              value = escape ? escape_html(value) : value.to_s
             when Array, Hash
               value = TagHelper.build_tag_values(value) if key == "class"
               value = escape ? @view_context.safe_join(value, " ") : value.join(" ")
             when Regexp
-              value = escape ? ERB::Util.unwrapped_html_escape(value.source) : value.source
+              value = escape ? escape_html(value.source) : value.source
             when Symbol
-              value = escape ? ERB::Util.unwrapped_html_escape(value.name) : value.name
+              value = escape ? escape_html(value.name) : value.name
             else
-              value = escape ? ERB::Util.unwrapped_html_escape(value) : value.to_s
+              value = escape ? escape_html(value) : value.to_s
             end
             value = value.gsub('"', "&quot;") if value.include?('"')
 
@@ -1673,6 +1673,11 @@ module ActionView
               value = value.to_json
             end
             append_tag_option(output, key, value, escape)
+          end
+
+          def escape_html(value)
+            value = value.to_s
+            value.html_safe? ? value : ERB::Escape.html_escape(value)
           end
 
           def respond_to_missing?(*args)
