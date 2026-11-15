@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         side: [before, after]
-        test: [server_timing_throttled, async_retry_order]
+        test: [async_retry_order]
         shard: [1, 2]
     env:
       BUNDLE_WITHOUT: rubocop:mdl:doc
@@ -29,7 +29,7 @@ jobs:
         with:
           path: rails
           repository: ${{ matrix.side == 'before' && 'rails/rails' || 'thomasklemm/rails' }}
-          ref: ${{ matrix.side == 'before' && '8217632cf87ad03a0f36212b7ea3e0ad933224bc' || '866942ff697f2f0fd9d7349a173009599c97cf0d' }}
+          ref: ${{ matrix.side == 'before' && '8217632cf87ad03a0f36212b7ea3e0ad933224bc' || 'fdd771cf79b640f3aaf36b633c048d4d76b56a32' }}
       - name: System packages
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libvips libyaml-dev libsqlite3-dev > /dev/null
       - uses: ruby/setup-ruby@v1
@@ -68,7 +68,7 @@ jobs:
               done ;;
             async_retry_order)
               cd activerecord; n=60
-              out=$(sh ../../loops/.github/flk1/async_loop.sh $n); echo "$out"
+              out=$(sh ../../loops/.github/flk1/async_loop.sh $n $(( (${{ matrix.shard }} - 1) * n + 1 ))); echo "$out"
               fails=$(echo "$out" | sed -n 's/^RESULT \([0-9]*\) failing.*/\1/p') ;;
           esac
           echo "RESULT ${{ matrix.test }} ${{ matrix.side }} shard ${{ matrix.shard }}: $fails failing of $n runs"
