@@ -10,45 +10,58 @@ permissions:
 
 jobs:
   loop:
-    name: ${{ matrix.test }} ${{ matrix.side }} ${{ matrix.load }} ${{ matrix.shard }}
+    name: ${{ matrix.test }} ${{ matrix.side }} ${{ matrix.shard }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
         side: [before, after]
-        test: [server_timing, server_restart]
-        load: [idle, stress]
+        test: [server_timing_throttled, server_restart_immediate_touch, unconnected_first]
         shard: [1, 2]
-        exclude:
-          - test: server_restart
-            load: stress
     env:
       BUNDLE_WITHOUT: rubocop:mdl:doc
     steps:
       - uses: actions/checkout@v4
         with:
+          path: loops
+      - uses: actions/checkout@v4
+        with:
           repository: ${{ matrix.side == 'before' && 'rails/rails' || 'thomasklemm/rails' }}
           ref: ${{ matrix.side == 'before' && '8217632cf87ad03a0f36212b7ea3e0ad933224bc' || 'thomasklemm/fix-flaky-ci-tests' }}
       - name: System packages
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq stress-ng libvips libyaml-dev > /dev/null
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libvips libyaml-dev libsqlite3-dev > /dev/null
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "4.0"
           bundler-cache: true
       - name: Loop
         run: |
-          if [ "${{ matrix.load }}" = stress ]; then stress-ng --cpu $(( $(nproc) * 2 )) --quiet & fi
-          case "${{ matrix.test }}" in
-            server_timing) dir=actionpack; file=test/dispatch/server_timing_test.rb; n=150; extra='-n /nested|sibling/' ;;
-            server_restart) dir=railties; file=test/application/server_test.rb; n=60; extra='-n test_restart_rails_server_with_custom_pid_file_path' ;;
-          esac
-          cd $dir
           fails=0
-          for i in $(seq 1 $n); do
-            if ! timeout 300 bundle exec ruby -w -Itest -Ilib -I../activesupport/lib -I../actionpack/lib -I../actionview/lib -I../activemodel/lib $file $extra > /tmp/out.txt 2>&1; then
-              fails=$((fails+1)); grep -A4 -E "Failure:|Error:" /tmp/out.txt | head -8
-            fi
-          done
-          echo "RESULT ${{ matrix.test }} ${{ matrix.side }} ${{ matrix.load }} shard ${{ matrix.shard }}: $fails failing of $n runs"
-          echo "${{ matrix.test }},${{ matrix.side }},${{ matrix.load }},${{ matrix.shard }},$fails,$n" >> $GITHUB_STEP_SUMMARY
+          case "${{ matrix.test }}" in
+            server_timing_throttled)
+              # Like a container limited to 2 CPUs (docker --cpus 2) that shares them with 4 busy processes.
+              sudo mkdir /sys/fs/cgroup/flk1
+              echo "200000 100000" | sudo tee /sys/fs/cgroup/flk1/cpu.max
+              echo $$ | sudo tee /sys/fs/cgroup/flk1/cgroup.procs
+              for i in 1 2 3 4; do ruby -e 'loop { }' & done
+              cd actionpack; n=100
+              for i in $(seq 1 $n); do
+                bundle exec ruby -Itest test/dispatch/server_timing_test.rb -n "/nested|sibling/" > /tmp/out.txt 2>&1 || { fails=$((fails+1)); grep -A3 "Failure:" /tmp/out.txt | head -4; }
+                grep -q "3 runs" /tmp/out.txt || { echo "unexpected output"; cat /tmp/out.txt; exit 1; }
+              done ;;
+            server_restart_immediate_touch)
+              cp ../loops/.github/flk1/server_restart_amplified_test.rb railties/test/application/
+              cd railties; n=50
+              FIX=${{ matrix.side == 'after' && '1' || '0' }} N=$n bundle exec ruby -w -Itest -Ilib -I../activesupport/lib -I../actionpack/lib -I../actionview/lib -I../activemodel/lib test/application/server_restart_amplified_test.rb > /tmp/out.txt 2>&1 || true
+              grep -E "runs, " /tmp/out.txt
+              fails=$(grep -c 'Restarting" expected' /tmp/out.txt || true) ;;
+            unconnected_first)
+              cd activerecord; n=20
+              for i in $(seq 1 $n); do
+                ARCONN=sqlite3_ractor bundle exec ruby -Itest ../loops/.github/flk1/load_and_run.rb -n /TestUnconnectedAdapter/ > /tmp/out.txt 2>&1 || true
+                grep -q "3 runs, .* 0 errors" /tmp/out.txt || { fails=$((fails+1)); grep -m1 -A1 "Error:" /tmp/out.txt; grep "runs, " /tmp/out.txt; }
+              done ;;
+          esac
+          echo "RESULT ${{ matrix.test }} ${{ matrix.side }} shard ${{ matrix.shard }}: $fails failing of $n runs"
+          echo "${{ matrix.test }},${{ matrix.side }},${{ matrix.shard }},$fails,$n" >> $GITHUB_STEP_SUMMARY
