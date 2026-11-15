@@ -1,0 +1,54 @@
+name: FLK1 flake loops
+
+on:
+  push:
+    branches: [flk1-flake-loops]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  loop:
+    name: ${{ matrix.test }} ${{ matrix.side }} ${{ matrix.load }} ${{ matrix.shard }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        side: [before, after]
+        test: [server_timing, server_restart]
+        load: [idle, stress]
+        shard: [1, 2]
+        exclude:
+          - test: server_restart
+            load: stress
+    env:
+      BUNDLE_WITHOUT: rubocop:mdl:doc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.side == 'before' && 'rails/rails' || 'thomasklemm/rails' }}
+          ref: ${{ matrix.side == 'before' && '8217632cf87ad03a0f36212b7ea3e0ad933224bc' || 'thomasklemm/fix-flaky-ci-tests' }}
+      - name: System packages
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq stress-ng libvips libyaml-dev > /dev/null
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+      - name: Loop
+        run: |
+          if [ "${{ matrix.load }}" = stress ]; then stress-ng --cpu $(( $(nproc) * 2 )) --quiet & fi
+          case "${{ matrix.test }}" in
+            server_timing) dir=actionpack; file=test/dispatch/server_timing_test.rb; n=150; extra='-n /nested|sibling/' ;;
+            server_restart) dir=railties; file=test/application/server_test.rb; n=60; extra='-n test_restart_rails_server_with_custom_pid_file_path' ;;
+          esac
+          cd $dir
+          fails=0
+          for i in $(seq 1 $n); do
+            if ! timeout 300 bundle exec ruby -w -Itest -Ilib -I../activesupport/lib -I../actionpack/lib -I../actionview/lib -I../activemodel/lib $file $extra > /tmp/out.txt 2>&1; then
+              fails=$((fails+1)); grep -A4 -E "Failure:|Error:" /tmp/out.txt | head -8
+            fi
+          done
+          echo "RESULT ${{ matrix.test }} ${{ matrix.side }} ${{ matrix.load }} shard ${{ matrix.shard }}: $fails failing of $n runs"
+          echo "${{ matrix.test }},${{ matrix.side }},${{ matrix.load }},${{ matrix.shard }},$fails,$n" >> $GITHUB_STEP_SUMMARY
