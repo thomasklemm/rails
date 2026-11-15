@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         side: [before, after]
-        test: [server_timing_throttled, server_restart_immediate_touch, unconnected_first]
+        test: [server_timing_throttled, server_restart_immediate_touch, unconnected_first, async_retry_order]
         shard: [1, 2]
     env:
       BUNDLE_WITHOUT: rubocop:mdl:doc
@@ -66,6 +66,10 @@ jobs:
                 ARCONN=sqlite3_ractor bundle exec ruby -Itest ../../loops/.github/flk1/load_and_run.rb -n /TestUnconnectedAdapter/ > /tmp/out.txt 2>&1 || true
                 grep -q "3 runs, .* 0 errors" /tmp/out.txt || { fails=$((fails+1)); grep -m1 -A1 "Error:" /tmp/out.txt; grep "runs, " /tmp/out.txt; }
               done ;;
+            async_retry_order)
+              cd activerecord; n=60
+              out=$(sh ../../loops/.github/flk1/async_loop.sh $n); echo "$out"
+              fails=$(echo "$out" | sed -n 's/^RESULT \([0-9]*\) failing.*/\1/p') ;;
           esac
           echo "RESULT ${{ matrix.test }} ${{ matrix.side }} shard ${{ matrix.shard }}: $fails failing of $n runs"
           echo "${{ matrix.test }},${{ matrix.side }},${{ matrix.shard }},$fails,$n" >> $GITHUB_STEP_SUMMARY
