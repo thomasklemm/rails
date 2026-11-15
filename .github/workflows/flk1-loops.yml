@@ -27,6 +27,7 @@ jobs:
           path: loops
       - uses: actions/checkout@v4
         with:
+          path: rails
           repository: ${{ matrix.side == 'before' && 'rails/rails' || 'thomasklemm/rails' }}
           ref: ${{ matrix.side == 'before' && '8217632cf87ad03a0f36212b7ea3e0ad933224bc' || 'thomasklemm/fix-flaky-ci-tests' }}
       - name: System packages
@@ -35,8 +36,11 @@ jobs:
         with:
           ruby-version: "4.0"
           bundler-cache: true
+          working-directory: rails
       - name: Loop
+        working-directory: rails
         run: |
+          set +e
           fails=0
           case "${{ matrix.test }}" in
             server_timing_throttled)
@@ -59,7 +63,7 @@ jobs:
             unconnected_first)
               cd activerecord; n=20
               for i in $(seq 1 $n); do
-                ARCONN=sqlite3_ractor bundle exec ruby -Itest ../loops/.github/flk1/load_and_run.rb -n /TestUnconnectedAdapter/ > /tmp/out.txt 2>&1 || true
+                ARCONN=sqlite3_ractor bundle exec ruby -Itest ../../loops/.github/flk1/load_and_run.rb -n /TestUnconnectedAdapter/ > /tmp/out.txt 2>&1 || true
                 grep -q "3 runs, .* 0 errors" /tmp/out.txt || { fails=$((fails+1)); grep -m1 -A1 "Error:" /tmp/out.txt; grep "runs, " /tmp/out.txt; }
               done ;;
           esac
