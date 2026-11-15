@@ -39,7 +39,6 @@ module ActiveSupport
   #
   class OrderedOptions < Hash
     alias_method :_get, :[] # preserve the original #[] method
-    protected :_get # make it protected
 
     def []=(key, value)
       super(key.to_sym, value)
