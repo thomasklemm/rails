@@ -4,8 +4,8 @@ module ActionView
   module Helpers
     module Tags # :nodoc:
       module Placeholderable # :nodoc:
-        def initialize(*)
-          super
+        def initialize(...)
+          super(...)
 
           if tag_value = @options[:placeholder]
             placeholder = tag_value if tag_value.is_a?(String)

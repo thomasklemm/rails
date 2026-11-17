@@ -18,7 +18,7 @@ module ActionView
         end
       end
 
-      def content_tag(type, options, *)
+      def content_tag(type, content_or_options_with_block, options = nil, escape = true)
         select_markup_helper?(type) ? super : error_wrapping(super)
       end
 

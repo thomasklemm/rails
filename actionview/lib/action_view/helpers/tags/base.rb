@@ -50,13 +50,12 @@ module ActionView
           def value_before_type_cast
             return unless object
 
-            method_before_type_cast = @method_name + "_before_type_cast"
-
-            if value_came_from_user? && object.respond_to?(method_before_type_cast)
-              object.public_send(method_before_type_cast)
-            else
-              value
+            if value_came_from_user?
+              method_before_type_cast = @method_name + "_before_type_cast"
+              return object.public_send(method_before_type_cast) if object.respond_to?(method_before_type_cast)
             end
+
+            value
           end
 
           def value_came_from_user?
@@ -126,7 +125,10 @@ module ActionView
           end
 
           def sanitized_value(value)
-            value.to_s.gsub(/[\s.]/, "_").gsub(/[^-[[:word:]]]/, "").downcase
+            sanitized = value.to_s.gsub(/[\s.]/, "_")
+            sanitized.gsub!(/[^-[[:word:]]]/, "")
+            sanitized.downcase!
+            sanitized
           end
 
           def name_and_id_index(options)

@@ -4,8 +4,10 @@ module ActionView
   module Helpers
     module Tags # :nodoc:
       class Translator # :nodoc:
+        NESTED_ATTRIBUTES_INDEX = /\[(.*)_attributes\]\[\d+\]/
+
         def initialize(object, object_name, method_and_value, scope:)
-          @object_name = object_name.gsub(/\[(.*)_attributes\]\[\d+\]/, '.\1')
+          @object_name = object_name.match?(NESTED_ATTRIBUTES_INDEX) ? object_name.gsub(NESTED_ATTRIBUTES_INDEX, '.\1') : object_name
           @method_and_value = method_and_value
           @scope = scope
           @model = object.respond_to?(:to_model) ? object.to_model : nil
