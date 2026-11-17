@@ -22,7 +22,12 @@ module ActionView
           def i18n_default
             if model
               key = model.model_name.i18n_key
-              ["#{key}.#{method_and_value}".to_sym, ""]
+
+              if key.is_a?(Symbol) && key.name == object_name
+                ""
+              else
+                ["#{key}.#{method_and_value}".to_sym, ""]
+              end
             else
               ""
             end
