@@ -1,3 +1,11 @@
+*   Don't compare owner conditions when joining an association without a scope.
+
+    Comparing the where clauses could serialize their bind values early, so a
+    join raised `ActiveModel::RangeError` for an out of range condition in the
+    target's default scope instead of matching no records.
+
+    *Thomas Klemm*
+
 *   Add `config.active_record.association_scope_keeps_owner_conditions` to
     always apply the conditions tying the records of an association to the
     owner, and deprecate removing them with the association scope.
