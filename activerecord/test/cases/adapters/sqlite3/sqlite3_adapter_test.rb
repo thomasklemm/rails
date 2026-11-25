@@ -941,11 +941,10 @@ module ActiveRecord
         @conn.execute "DROP VIEW IF EXISTS main.shadowed"
       end
 
-      def test_schema_readers_are_not_hidden_by_temporary_indexes_triggers_or_tables_of_other_names
+      def test_schema_readers_are_not_hidden_by_temporary_triggers_or_tables_of_other_names
         with_example_table "id integer PRIMARY KEY, number integer", "shadowed" do
           @conn.add_index "shadowed", :number
           @conn.execute "CREATE TEMP TABLE index_shadowed_on_number (other integer)"
-          @conn.execute "CREATE INDEX temp.shadowed ON index_shadowed_on_number (other)"
           @conn.execute "CREATE TEMP TRIGGER shadowed AFTER INSERT ON main.shadowed BEGIN SELECT 1; END"
 
           assert_equal %w[ id number ], @conn.columns("shadowed").map(&:name)
@@ -954,6 +953,23 @@ module ActiveRecord
         ensure
           @conn.execute "DROP TABLE IF EXISTS temp.index_shadowed_on_number"
           @conn.execute "DROP TRIGGER IF EXISTS temp.shadowed"
+        end
+      end
+
+      # SQLite allows a temporary index to share a permanent table's name since 3.38.
+      if ActiveRecord::Base.lease_connection.database_version >= "3.38.0"
+        def test_schema_readers_are_not_hidden_by_temporary_indexes
+          with_example_table "id integer PRIMARY KEY, number integer", "shadowed" do
+            @conn.add_index "shadowed", :number
+            @conn.execute "CREATE TEMP TABLE index_shadowed_on_number (other integer)"
+            @conn.execute "CREATE INDEX temp.shadowed ON index_shadowed_on_number (other)"
+
+            assert_equal %w[ id number ], @conn.columns("shadowed").map(&:name)
+            assert_equal "id", @conn.primary_key("shadowed")
+            assert_equal [%w[ number ]], @conn.indexes("shadowed").map(&:columns)
+          ensure
+            @conn.execute "DROP TABLE IF EXISTS temp.index_shadowed_on_number"
+          end
         end
       end
 
