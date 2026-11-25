@@ -237,6 +237,17 @@ class HttpTokenAuthenticationTest < ActionController::TestCase
     assert_equal "token", result
   end
 
+  test "authenticate calls a two-parameter lambda without the scheme" do
+    controller = Struct.new(:request).new(sample_request("token"))
+    login = ->(token, options) { [token, options[:nonce]] }
+    login_with_defaults = ->(token = nil, options = nil) { [token, options[:nonce]] }
+    login_with_scheme = ->(token, options, scheme) { [token, options[:nonce], scheme] }
+
+    assert_equal ["token", "def"], ActionController::HttpAuthentication::Token.authenticate(controller, &login)
+    assert_equal ["token", "def"], ActionController::HttpAuthentication::Token.authenticate(controller, &login_with_defaults)
+    assert_equal ["token", "def", :token], ActionController::HttpAuthentication::Token.authenticate(controller, &login_with_scheme)
+  end
+
   test "authentication rejects unknown schemes by default" do
     @request.env["HTTP_AUTHORIZATION"] = "Basic lifo"
     get :index

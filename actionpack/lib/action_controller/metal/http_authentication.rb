@@ -495,7 +495,11 @@ module ActionController
         end
 
         unless token.blank?
-          login_procedure.call(token, options, request_scheme)
+          if takes_scheme?(login_procedure)
+            login_procedure.call(token, options, request_scheme)
+          else
+            login_procedure.call(token, options)
+          end
         end
       end
 
@@ -590,6 +594,13 @@ module ActionController
         def parse_token_and_options(authorization_request)
           params = token_params_from authorization_request
           [params.shift[1], Hash[params].with_indifferent_access]
+        end
+
+        # A lambda, such as a method passed as `&method(:authenticate)`, raises
+        # when given an argument it doesn't take.
+        def takes_scheme?(procedure)
+          !procedure.lambda? || procedure.parameters.any? { |type, _| type == :rest } ||
+            procedure.parameters.count { |type, _| type == :req || type == :opt } > 2
         end
 
         def normalize_schemes(schemes)
