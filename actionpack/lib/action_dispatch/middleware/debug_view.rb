@@ -10,9 +10,12 @@ module ActionDispatch
     RESCUES_TEMPLATE_PATHS = [File.expand_path("templates", __dir__)].freeze
     HOST_APP_PATH = ENV["RAILS_HOST_APP_PATH"]
 
+    def self.resolver # :nodoc:
+      @resolver ||= ActionView::FileSystemResolver.new(RESCUES_TEMPLATE_PATHS.first)
+    end
+
     def initialize(assigns)
-      paths = RESCUES_TEMPLATE_PATHS.dup
-      lookup_context = ActionView::LookupContext.new(paths)
+      lookup_context = ActionView::LookupContext.new([self.class.resolver])
       super(lookup_context, assigns, nil)
     end
 
