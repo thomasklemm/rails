@@ -167,6 +167,19 @@ module ApplicationTests
       end
     end
 
+    test "/rails/conductor/action_mailbox leaves the inbound_emails route name to the app in development" do
+      app_file "config/routes.rb", <<-RUBY
+        Rails.application.routes.draw do
+          resources :inbound_emails, only: :index
+        end
+      RUBY
+
+      app("development")
+      Rails.application.reload_routes!
+
+      assert_equal "/inbound_emails", Rails.application.routes.url_helpers.inbound_emails_path
+    end
+
     test "rails/health in production" do
       app("production")
 

@@ -44,7 +44,7 @@ module ActionMailbox
         app.routes.prepend do
           scope "rails/conductor/action_mailbox/", module: "rails/conductor/action_mailbox" do
             get  "inbound_emails", to: "inbound_emails#index", as: :rails_conductor_inbound_emails, internal: true
-            post "inbound_emails", to: "inbound_emails#create", internal: true
+            post "inbound_emails", to: "inbound_emails#create", as: nil, internal: true
             get  "inbound_emails/new", to: "inbound_emails#new", as: :new_rails_conductor_inbound_email, internal: true
             get  "inbound_emails/:id", to: "inbound_emails#show", as: :rails_conductor_inbound_email, internal: true
             get  "inbound_emails/sources/new", to: "inbound_emails/sources#new", as: :new_rails_conductor_inbound_email_source, internal: true
