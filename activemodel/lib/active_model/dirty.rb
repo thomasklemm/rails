@@ -451,7 +451,7 @@ module ActiveModel
       end
 
       def forget_attribute_assignments
-        @attributes = @attributes.map(&:forgetting_assignment) if defined?(@attributes)
+        @attributes = @attributes.forgetting_assignments if defined?(@attributes)
       end
 
       def mutations_before_last_save

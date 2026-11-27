@@ -138,6 +138,12 @@ module ActiveModel
       keys
     end
 
+    # The keys whose attributes can have changed since they were loaded.
+    #: () -> Array[String]
+    def touched_keys
+      keys
+    end
+
     def fetch_value(name, &block)
       self[name].value(&block)
     end
@@ -230,6 +236,11 @@ module ActiveModel
     def map(&block)
       new_attributes = attributes.transform_row(&block)
       AttributeSet.new(new_attributes)
+    end
+
+    #: () -> ActiveModel::AttributeSet
+    def forgetting_assignments
+      map(&:forgetting_assignment)
     end
 
     def values
@@ -355,6 +366,20 @@ module ActiveModel
       end
     end
 
+    # Like #keys, without the attributes that are still only values in the
+    # row, which haven't changed.
+    #: () -> Array[String]
+    def touched_keys
+      row_keys.keep_if do |name|
+        index = index_for_name(name)
+        if attribute = lookup(index)
+          attribute.initialized?
+        else
+          !untouched?(index) && attribute_at(name, index).initialized?
+        end
+      end
+    end
+
     # Same keys, in the same order, as #keys. Values the row has are read
     # like the generated readers do, without building an Attribute for each.
     #: () -> Hash[String, untyped]
@@ -451,6 +476,18 @@ module ActiveModel
     def map(&block)
       materialize
       dup.transform_attributes!(&block)
+    end
+
+    # Attributes that are still only values in the row stay unbuilt, since
+    # forgetting the assignment of one built from the row gives the same
+    # attribute.
+    #: () -> ActiveModel::LazyIndexedAttributeSet
+    def forgetting_assignments
+      row_keys.each do |name|
+        index = index_for_name(name)
+        attribute_at(name, index) unless untouched?(index)
+      end
+      dup.transform_attributes!(&:forgetting_assignment)
     end
 
     protected
@@ -550,6 +587,12 @@ module ActiveModel
       #: (String, Integer) -> ActiveModel::Attribute
       def attribute_at(name, index)
         lookup(index) || default_attribute(name, index)
+      end
+
+      # Not built and not cast, so it still holds the value it was loaded with.
+      #: (Integer) -> bool
+      def untouched?(index)
+        !lookup(index) && IndexedRow.key_at?(@row, index) && UNCAST.equal?(@casted_values[index])
       end
 
       # Stores the block's result for the attribute +name+. Unknown names
@@ -716,6 +759,11 @@ module ActiveModel
       @shared.keys | own_only(@own.keys)
     end
 
+    #: () -> Array[String]
+    def touched_keys
+      @shared.touched_keys | own_only(@own.touched_keys)
+    end
+
     #: (String) ?{ (String) -> untyped } -> untyped
     def fetch_value(name, &block)
       set_for(name).fetch_value(name, &block)
@@ -814,6 +862,11 @@ module ActiveModel
     #: () { (ActiveModel::Attribute) -> ActiveModel::Attribute } -> ActiveModel::ReindexedAttributeSet
     def map(&block)
       self.class.new(@shared.map(&block), @own.map(&block))
+    end
+
+    #: () -> ActiveModel::ReindexedAttributeSet
+    def forgetting_assignments
+      self.class.new(@shared.forgetting_assignments, @own.forgetting_assignments)
     end
 
     #: () -> ActiveModel::ReindexedAttributeSet

@@ -72,7 +72,7 @@ module ActiveModel
       end
 
       def attr_names
-        attributes.keys
+        attributes.touched_keys
       end
 
       def attribute_changed?(attr_name)
