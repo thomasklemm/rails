@@ -1540,9 +1540,9 @@ module ActionView
           "<#{name}#{tag_options}>#{PRE_CONTENT_STRINGS[name]}#{content}</#{name}>".freeze.html_safe
         end
 
-        def tag_options(options, escape = true) # :nodoc:
+        def tag_options(options, escape = true, output = nil) # :nodoc:
           return if options.blank?
-          output = +""
+          output ||= +""
           sep    = " "
           options.each_pair do |key, value|
             next if key.blank?
@@ -1611,7 +1611,10 @@ module ActionView
           end
 
           def self_closing_tag_string(name, options, escape = true, tag_suffix = " />")
-            "<#{name}#{tag_options(options, escape)}#{tag_suffix}".freeze.html_safe
+            output = +"<#{name}"
+            tag_options(options, escape, output)
+            output << tag_suffix
+            output.freeze.html_safe
           end
 
           def boolean_tag_option(key)
@@ -1760,7 +1763,10 @@ module ActionView
           tag_builder
         else
           ensure_valid_html5_tag_name(name)
-          "<#{name}#{tag_builder.tag_options(options, escape) if options}#{open ? ">" : " />"}".freeze.html_safe
+          output = +"<#{name}"
+          tag_builder.tag_options(options, escape, output) if options
+          output << (open ? ">" : " />")
+          output.freeze.html_safe
         end
       end
 
